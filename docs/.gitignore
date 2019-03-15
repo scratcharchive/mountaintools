@@ -1,4 +1,7 @@
 _build
+doctrees
+_static
+.buildinfo
 *.aux
 *.fdb_latexmk
 *.fls
