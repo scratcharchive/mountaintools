@@ -150,7 +150,111 @@
 <dl class="class">
 <dt id="mountainclient.mountainclient.MountainClient">
 <em class="property">class </em><code class="descclassname">mountainclient.mountainclient.</code><code class="descname">MountainClient</code><a class="headerlink" href="#mountainclient.mountainclient.MountainClient" title="Permalink to this definition">¶</a></dt>
-<dd><p>T</p>
+<dd><p>MountainClient is a python client for accessing local and remote mountain
+databases and KBucket shares. All I/O for MountainTools is handled using
+this client.</p>
+<p>There is a global client that may be imported via</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mountaintools</span> <span class="kn">import</span> <span class="n">client</span> <span class="k">as</span> <span class="n">mt</span>
+</pre></div>
+</div>
+<p>Or you can instantiate a local client object:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mountaintools</span> <span class="kn">import</span> <span class="n">MountainClient</span>
+<span class="n">mt_client</span> <span class="o">=</span> <span class="n">MountainClient</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The global client allows a single login to apply to the entire program, but
+there are also times when using a local instance is preferred.</p>
+<p>By default the client utilizes cache directories on your local disk, but it
+can also be configured to read and write from remote servers. For example,
+the following code saves and retrieves some short text strings using the
+local file system as storage.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mountaintools</span> <span class="kn">import</span> <span class="n">client</span> <span class="k">as</span> <span class="n">mt</span>
+
+<span class="c1"># Setting values (these should be short strings, &lt;=80 characters)</span>
+<span class="n">mt</span><span class="o">.</span><span class="n">setValue</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="s1">&#39;some-key1&#39;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s1">&#39;hello 1&#39;</span><span class="p">)</span>
+<span class="n">mt</span><span class="o">.</span><span class="n">setValue</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;some_name&#39;</span><span class="p">,</span> <span class="n">number</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span> <span class="n">value</span><span class="o">=</span><span class="s1">&#39;hello 2&#39;</span><span class="p">)</span>
+
+<span class="c1"># Getting values</span>
+<span class="n">val1</span> <span class="o">=</span> <span class="n">mt</span><span class="o">.</span><span class="n">getValue</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="s1">&#39;some-key1&#39;</span><span class="p">)</span>
+<span class="n">val2</span> <span class="o">=</span> <span class="n">mt</span><span class="o">.</span><span class="n">getValue</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;some_name&#39;</span><span class="p">,</span> <span class="n">number</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>By default these are stored inside the ~/.mountain database directory. This
+may be configured using the MOUNTAIN_DIR environment variable.</p>
+<p>While setValue() and getValue() are limited to working with short strings,
+larger objects may be stored using saveText(), saveObject() and saveFile(),
+and retrieved using loadText(), loadObject() and loadFile(), as follows:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mountaintools</span> <span class="kn">import</span> <span class="n">client</span> <span class="k">as</span> <span class="n">mt</span>
+
+<span class="c1"># Local storage of data and files, retrievable by SHA-1 hash</span>
+<span class="n">some_text</span> <span class="o">=</span> <span class="s1">&#39;This is some text&#39;</span>
+<span class="n">path</span> <span class="o">=</span> <span class="n">mt</span><span class="o">.</span><span class="n">saveText</span><span class="p">(</span><span class="n">some_text</span><span class="p">,</span> <span class="n">basename</span><span class="o">=</span><span class="s1">&#39;test.txt&#39;</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<span class="c1"># Output: sha1://482cb0cfcbed6740a2bcb659c9ccc22a4d27b369/test.txt</span>
+
+<span class="c1"># Later we can use this to retrieve the text</span>
+<span class="n">retrieved_text</span> <span class="o">=</span> <span class="n">mt</span><span class="o">.</span><span class="n">loadText</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">)</span>
+
+<span class="c1"># ... or retrieve the path to a local file containing the text</span>
+<span class="n">fname</span> <span class="o">=</span> <span class="n">mt</span><span class="o">.</span><span class="n">realizeFile</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+<span class="c1"># Output: /tmp/sha1-cache/4/82/482cb0cfcbed6740a2bcb659c9ccc22a4d27b369</span>
+
+<span class="c1"># Or we can store some large text by key and retrieve it later</span>
+<span class="n">large_text</span> <span class="o">=</span> <span class="s1">&#39;some large repeating text&#39;</span><span class="o">*</span><span class="mi">100</span>
+<span class="n">mt</span><span class="o">.</span><span class="n">saveText</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;key-for-repeating-text&#39;</span><span class="p">),</span> <span class="n">text</span><span class="o">=</span><span class="n">large_text</span><span class="p">)</span>
+<span class="n">txt</span> <span class="o">=</span> <span class="n">mt</span><span class="o">.</span><span class="n">loadText</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;key-for-repeating-text&#39;</span><span class="p">))</span>
+
+<span class="c1"># Similarly we can store python dicts via json content</span>
+<span class="n">some_object</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">some</span><span class="o">=</span><span class="s1">&#39;object&#39;</span><span class="p">)</span>
+<span class="n">path</span> <span class="o">=</span> <span class="n">mt</span><span class="o">.</span><span class="n">saveObject</span><span class="p">(</span><span class="n">some_object</span><span class="p">,</span> <span class="n">basename</span><span class="o">=</span><span class="s1">&#39;object.json&#39;</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<span class="c1"># Output: sha1://b77fdda467b03d7a0c3e06f6f441f689ac46e817/object.json</span>
+
+<span class="n">retrieved_object</span> <span class="o">=</span> <span class="n">mt</span><span class="o">.</span><span class="n">loadObject</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="n">retrieved_object</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">retrieved_object</span><span class="p">)</span> <span class="o">==</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">some_object</span><span class="p">)</span>
+
+<span class="c1"># Or store objects by key</span>
+<span class="n">some_other_object</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">some_other</span><span class="o">=</span><span class="s1">&#39;object&#39;</span><span class="p">)</span>
+<span class="n">mt</span><span class="o">.</span><span class="n">saveObject</span><span class="p">(</span><span class="nb">object</span><span class="o">=</span><span class="n">some_other_object</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">some</span><span class="o">=</span><span class="s1">&#39;key&#39;</span><span class="p">))</span>
+<span class="n">obj</span> <span class="o">=</span> <span class="n">mt</span><span class="o">.</span><span class="n">loadObject</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">some</span><span class="o">=</span><span class="s1">&#39;key&#39;</span><span class="p">))</span>
+<span class="k">assert</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">some_other_object</span><span class="p">)</span> <span class="o">==</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+
+<span class="c1"># You can do the same with files</span>
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">gettempdir</span><span class="p">()</span><span class="o">+</span><span class="s1">&#39;/test___.txt&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;some file content&#39;</span><span class="p">)</span>
+<span class="n">path</span> <span class="o">=</span> <span class="n">mt</span><span class="o">.</span><span class="n">saveFile</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">gettempdir</span><span class="p">()</span><span class="o">+</span><span class="s1">&#39;/test___.txt&#39;</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<span class="c1"># Output: sha1://ee025361a15e3e8074e9c0b44b4f98aabc829b3d/test___.txt</span>
+
+<span class="c1"># Then load the text of the file at a later time</span>
+<span class="n">txt</span> <span class="o">=</span> <span class="n">mt</span><span class="o">.</span><span class="n">loadText</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">txt</span> <span class="o">==</span> <span class="s1">&#39;some file content&#39;</span>
+
+<span class="n">sha1</span> <span class="o">=</span> <span class="n">mt</span><span class="o">.</span><span class="n">computeFileSha1</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="n">mt</span><span class="o">.</span><span class="n">realizeFile</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
+<span class="n">txt2</span> <span class="o">=</span> <span class="n">mt</span><span class="o">.</span><span class="n">loadText</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s1">&#39;sha1://&#39;</span><span class="o">+</span><span class="n">sha1</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">txt2</span> <span class="o">==</span> <span class="s1">&#39;some file content&#39;</span>
+</pre></div>
+</div>
+<p>The larger content is stored in a disk-backed content-addressable storage
+database, located by default at /tmp/sha1-cache. This may be configured by
+setting the KBUCKET_CACHE_DIR environment variable.</p>
+<p>To access content on a remote server, you can use</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mountaintools</span> <span class="kn">import</span> <span class="n">client</span> <span class="k">as</span> <span class="n">mt</span>
+
+<span class="n">mt</span><span class="o">.</span><span class="n">configRemoteReadonly</span><span class="p">(</span><span class="n">collection</span><span class="o">=</span><span class="s1">&#39;&lt;collection&gt;&#39;</span><span class="p">,</span> <span class="n">share_id</span><span class="o">=</span><span class="s1">&#39;&lt;id&gt;&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>where &lt;collection&gt; and &lt;id&gt; refer to a remote mountain collection and
+KBucket share ID. For read/write access you will need to either provide
+the authorization tokens or log in as follows:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mountaintools</span> <span class="kn">import</span> <span class="n">client</span> <span class="k">as</span> <span class="n">mt</span>
+
+<span class="n">mt</span><span class="o">.</span><span class="n">login</span><span class="p">()</span>
+<span class="n">mt</span><span class="o">.</span><span class="n">configRemoteReadWrite</span><span class="p">(</span><span class="n">collection</span><span class="o">=</span><span class="s1">&#39;&lt;collection&gt;&#39;</span><span class="p">,</span> <span class="n">share_id</span><span class="o">=</span><span class="s1">&#39;&lt;id&gt;&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
 <dl class="method">
 <dt id="mountainclient.mountainclient.MountainClient.addRemoteCollection">
 <code class="descname">addRemoteCollection</code><span class="sig-paren">(</span><em>collection</em>, <em>token</em>, <em>admin_token</em><span class="sig-paren">)</span><a class="headerlink" href="#mountainclient.mountainclient.MountainClient.addRemoteCollection" title="Permalink to this definition">¶</a></dt>
