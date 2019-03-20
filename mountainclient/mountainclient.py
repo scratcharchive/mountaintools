@@ -6,6 +6,7 @@ import pathlib
 import random
 import base64
 import tempfile
+from copy import deepcopy
 from datetime import datetime as dt
 from .sha1cache import Sha1Cache
 from .mountainremoteclient import MountainRemoteClient
@@ -29,13 +30,11 @@ except:
 
 env_path=os.path.join(os.environ.get('HOME',''),'.mountaintools', '.env')
 if os.path.exists(env_path):
-    print('Loading environment from: '+env_path)
     try:
         from dotenv import load_dotenv
     except:
         raise Exception('Unable to import dotenv. Use pip install python-dotenv')
     load_dotenv(dotenv_path=env_path,verbose=True)
-    
 
 class MountainClient():
     """
@@ -176,9 +175,12 @@ class MountainClient():
             upload_token=None
         )
         self._verbose = False
-        self._local_db = MountainClientLocal()
         self._remote_client = MountainRemoteClient()
         self._login_config=None
+        self._share_ids_by_alias=dict()
+        self._kbucket_cache_codes=dict()
+        self._local_db = MountainClientLocal(kbucket_cache_codes=self._kbucket_cache_codes)
+        self._initialize_kbucket_cache_codes()
 
     def autoConfig(self, *, collection, key, ask_password=False, password=None):
         print('Warning: autoConfig is deprecated. Use login() and one of the following: configLocal(), configRemoteReadonly(), configRemoteReadWrite()')
@@ -379,7 +381,7 @@ class MountainClient():
             which means it is not set)
         """
 
-        if (share_id is not 0) and ('.' in share_id):
+        if (share_id is not 0) and (share_id) and ('.' in share_id):
             share_id=self._get_share_id_from_alias(share_id)
         if url is not 0:
             self._remote_config['url'] = url
@@ -626,6 +628,9 @@ class MountainClient():
             not found.
         """
 
+        if share_id and ('.' in share_id):
+            share_id=self._get_share_id_from_alias(share_id)
+
         if path is not None:
             return self._realize_file(path=path, share_id=share_id, dest_path=dest_path)
         elif key is not None:
@@ -743,6 +748,8 @@ class MountainClient():
             list0 = path.split('/')
             share_id = list0[2]
             path0 = '/'.join(list0[3:])
+            if share_id and ('.' in share_id):
+                share_id=self._get_share_id_from_alias(share_id)
             ret = self._read_kbucket_dir(
                 share_id=share_id, path=path0, recursive=recursive, include_sha1=include_sha1)
         else:
@@ -759,19 +766,47 @@ class MountainClient():
             list0 = path.split('/')
             sha1 = list0[2]
             return sha1
-        elif path.startswith('kbucket://'):
+
+        # the following might be a helpful shortcut at some point
+        # elif path.startswith('kbucket://sha1-cache/'):
+        #     list0 = path.split('/')
+        #     if len(list0) >= 7:
+        #         if (len(list0[4])==1) and (len(list0[5])==2) and (len(list0[6])==40):
+        #             raise Exception('test')
+        #             return list0[6]
+        #     print('WARNING: unexpected form of sha1-cache kbucket url: {}'.format(path))
+
+        if path.startswith('kbucket://'):
             sha1, size, url = self._local_db.getKBucketFileInfo(path=path)
             return sha1
         else:
             return self._local_db.computeFileSha1(path)
 
+    def computeFileOrDirHash(self, path):
+        if path.startswith('kbucket://'):
+            if self.findFile(path):
+                return self.computeFileSha1(path)
+            else:
+                return self.computeDirHash(path)
+        elif path.startswith('sha1://'):
+            return self.computeFileSha1(path)
+        else:
+            if os.path.isdir(path):
+                return self.computeDirHash(path)
+            else:
+                return self.computeFileSha1(path)
+
     def localCacheDir(self):
         return self._local_db.localCacheDir()
 
     def findFileBySha1(self, *, sha1, share_id=None):
+        if share_id and ('.' in share_id):
+            share_id=self._get_share_id_from_alias(share_id)
         return self._realize_file(path='sha1://'+sha1, resolve_locally=False, share_id=share_id)
 
     def findFile(self, path, local_only=False, share_id=None):
+        if share_id and ('.' in share_id):
+            share_id=self._get_share_id_from_alias(share_id)
         return self._realize_file(path=path, resolve_locally=False, local_only=local_only, share_id=share_id)
 
     def copyToLocalCache(self, path, basename=None):
@@ -792,14 +827,36 @@ class MountainClient():
         return None
 
     def _get_share_id_from_alias(self, share_id_alias):
+        if share_id_alias in self._share_ids_by_alias:
+            return self._share_ids_by_alias[share_id_alias]
         vals=share_id_alias.split('.')
         if len(vals)!=2:
             raise Exception('Invalid share_id alias: '+share_id_alias)
         ret=self.getValue(key=vals[1], collection=vals[0])
         if ret is None:
             raise Exception('Unable to resolve share_id from alias: '+share_id_alias)
-        print('Resolved share_id {} from alias {}'.format(ret, share_id_alias))
+        self._share_ids_by_alias[share_id_alias]=ret
         return ret
+
+    def _initialize_kbucket_cache_codes(self):
+        kbucket_cache_codes_fname=os.path.join(os.environ.get('HOME',''),'.mountaintools', 'kbucket_cache_codes')
+        if os.path.exists(kbucket_cache_codes_fname):
+            txt=_read_text_file(kbucket_cache_codes_fname)
+            lines=txt.splitlines()
+            for line0 in lines:
+                vals0 = line0.split()
+                if len(vals0)!=2:
+                    raise Exception('Error parsing file: '+kbucket_cache_codes_fname)
+                share_id=vals0[0]
+                if share_id and ('.' in share_id):
+                    try:
+                        share_id=self._get_share_id_from_alias(share_id)
+                    except:
+                        share_id=None
+                if share_id:
+                    self._kbucket_cache_codes[share_id]=vals0[1]
+                else:
+                    print('Warning: unable to establish cache code: '+line0)
 
     def _find_collection_token_from_login(self, collection, try_global=True):
         if try_global:
@@ -984,6 +1041,20 @@ class MountainClient():
         return node_info.get('cas_upload_url', None)
 
     def _read_kbucket_dir(self, *, share_id, path, recursive, include_sha1):
+        if share_id in self._kbucket_cache_codes:
+            cache_key=dict(
+                name='_read_kbucket_dir',
+                share_id=share_id,
+                cache_code=self._kbucket_cache_codes[share_id],
+                path=path,
+                recursive=recursive,
+                include_sha1=include_sha1
+            )
+            local_client = MountainClient()
+            obj = local_client.loadObject(key=cache_key)
+            if obj:
+                return obj
+
         url = self._local_db.kbucketUrl()+'/'+share_id+'/api/readdir/'+path
         obj = _http_get_json(url)
         if (not obj) or (not obj['success']):
@@ -1006,6 +1077,9 @@ class MountainClient():
             ret['dirs'][name0] = {}
             if recursive:
                 ret['dirs'][name0] = self._read_kbucket_dir(share_id=share_id, path = path+'/'+name0, recursive=True, include_sha1=include_sha1)
+
+        if share_id in self._kbucket_cache_codes:
+            local_client.saveObject(key=cache_key, object=ret)
         return ret
 
     def _read_file_system_dir(self, *, path, recursive, include_sha1):
@@ -1031,13 +1105,14 @@ class MountainClient():
 
 
 class MountainClientLocal():
-    def __init__(self):        
+    def __init__(self, kbucket_cache_codes=dict()):        
         self._sha1_cache = Sha1Cache()
         self._kbucket_url = os.getenv(
             'KBUCKET_URL', 'https://kbucket.flatironinstitute.org')
         self._nodeinfo_cache = dict()
         self._local_kbucket_shares = dict()
         self._initialize_local_kbucket_shares()
+        self._kbucket_cache_codes = kbucket_cache_codes
 
     def getValue(self, *, key, subkey=None):
         if subkey is not None:
@@ -1228,7 +1303,6 @@ class MountainClientLocal():
                         kbnode_fname=os.path.join(kbucket_config_path, 'kbnode.json')
                         obj = _read_json_file(kbnode_fname)
                         share_id=obj['node_id']
-                        print('Found local kbucket share {} at {}'.format(share_id, path0))
                         self._local_kbucket_shares[share_id]=dict(path=path0)
                     else:
                         print('WARNING: Parsing {}: No such config directory: {}'.format(local_kbucket_shares_fname, kbucket_config_path))    
@@ -1314,6 +1388,18 @@ class MountainClientLocal():
         kbshare_id = list0[2]
         path0 = '/'.join(list0[3:])
 
+        if kbshare_id in self._kbucket_cache_codes:
+            cache_key=dict(
+                name='_get_kbucket_file_info',
+                share_id=kbshare_id,
+                cache_code=self._kbucket_cache_codes[kbshare_id],
+                path=path
+            )
+            local_client = MountainClient()
+            obj = local_client.loadObject(key=cache_key)
+            if obj:
+                return (obj['sha1'], obj['size'], obj['url_download'])
+
         kbucket_url = self._get_kbucket_url_for_share(share_id=kbshare_id)
         if not kbucket_url:
             return (None, None, None)
@@ -1335,6 +1421,8 @@ class MountainClientLocal():
             return (None, None, None)
 
         url_download = kbucket_url+'/'+kbshare_id+'/download/'+path0
+        if kbshare_id in self._kbucket_cache_codes:
+            local_client.saveObject(key=cache_key, object=dict(sha1=sha1, size=size, url_download=url_download))
         return (sha1, size, url_download)
 
 
