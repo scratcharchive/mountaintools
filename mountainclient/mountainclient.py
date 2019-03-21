@@ -14,19 +14,7 @@ from .mountainremoteclient import _http_get_json
 import time
 from getpass import getpass
 import shutil
-try:
-    from filelock import FileLock
-except:
-    print('Warning: unable to import filelock... perhaps we are in a container that does not have this installed.')
-    # fake filelock
-    class FileLock():
-        def __init__(self, path):
-            pass
-        def __enter__(self):
-            return dict()
-        def __exit__(self, type, value, traceback):
-            pass
-
+from .filelock import FileLock
 
 env_path=os.path.join(os.environ.get('HOME',''),'.mountaintools', '.env')
 if os.path.exists(env_path):
@@ -1114,43 +1102,97 @@ class MountainClientLocal():
         self._initialize_local_kbucket_shares()
         self._kbucket_cache_codes = kbucket_cache_codes
 
-    def getValue(self, *, key, subkey=None):
-        if subkey is not None:
-            val = self.getValue(key=dict(subkeys=True, key=key))
-            try:
-                val = json.loads(val)
-            except:
-                val = None
-            if val is None:
-                val = dict()
-            if subkey == '-':
-                return json.dumps(val)
-            return val.get(subkey, None)
-        
+    def getSubKeys(self, *, key):
         keyhash = _hash_of_key(key)
-        db_path = self._get_db_path_for_keyhash(keyhash)
+        subkey_db_path = self._get_subkey_db_path_for_keyhash(keyhash)
+        ret = []
+        with FileLock(subkey_db_path+'.lock'):
+            list0 = _safe_list_dir(subkey_db_path)
+            for name0 in list0:
+                if name0.endswith('.txt'):
+                    ret.append(name0[0:-4])
+        return ret
 
-        ####################################
-        lock=FileLock(db_path+'.lock')
-        with lock:
-            db = _db_load(db_path)
-        ####################################
-
-        doc = db.get(keyhash, None)
-        if doc:
-            return doc.get('value')
+    def getValue(self, *, key, subkey=None):
+        keyhash = _hash_of_key(key)
+        if subkey is not None:
+            if subkey == '-':
+                subkeys = self.getSubKeys(key=key)
+                obj = dict()
+                for subkey in subkeys:
+                    val = self.getValue(key=key, subkey=subkey)
+                    if val is not None:
+                        obj[subkey] = val
+                return json.dumps(obj)
+            else:
+                subkey_db_path = self._get_subkey_db_path_for_keyhash(keyhash)
+                fname0 = os.path.join(subkey_db_path, subkey+'.txt')
+                if not os.path.exists(fname0):
+                    return None
+                with FileLock(subkey_db_path+'.lock'):
+                    txt = _read_text_file(fname0)
+                    return txt
         else:
-            return None
+            # not a subkey
+            db_path = self._get_db_path_for_keyhash(keyhash)
+            fname0 = db_path
+            if not os.path.exists(fname0):
+                return None
+            with FileLock(fname0+'.lock'):
+                txt = _read_text_file(fname0)
+                return txt
 
     def setValue(self, *, key, subkey, value, overwrite):
+        keyhash = _hash_of_key(key)
+        if subkey is not None:
+            if subkey == '-':
+                if value is not None:
+                    raise Exception('Cannot set all subkeys with value that is not None')
+                subkey_db_path = self._get_subkey_db_path_for_keyhash(keyhash)
+                with FileLock(subkey_db_path+'.lock'):
+                    shutil.rmtree(subkey_db_path)
+            else:
+                subkey_db_path = self._get_subkey_db_path_for_keyhash(keyhash)
+                fname0 = os.path.join(subkey_db_path, subkey+'.txt')
+                if os.path.exists(fname0):
+                    if not overwrite:
+                        return False
+                with FileLock(subkey_db_path+'.lock'):
+                    if os.path.exists(fname0):
+                        if not overwrite:
+                            return False
+                    if value is None:
+                        os.unlink(fname0)
+                    else:
+                        _write_text_file(fname0, value)
+                return True
+        else:
+            # not a subkey
+            db_path = self._get_db_path_for_keyhash(keyhash)
+            fname0 = db_path
+            if os.path.exists(fname0):
+                if not overwrite:
+                    return False
+            with FileLock(fname0+'.lock'):
+                if os.path.exists(fname0):
+                    if not overwrite:
+                        return False
+                if value is None:
+                    if os.path.exists(fname0):
+                        os.unlink(fname0)
+                else:
+                    _write_text_file(fname0, value)
+            return True
+
+
+    def _setValueOld(self, *, key, subkey, value, overwrite):
         if subkey is not None:
             key2=dict(subkeys=True, key=key)
             keyhash2 = _hash_of_key(key2)
             db_path2 = self._get_db_path_for_keyhash(keyhash2)    
 
             ####################################
-            lock=FileLock(db_path2+'.lock')
-            with lock:
+            with FileLock(db_path2+'.lock') as lock:
                 db2 = _db_load(db_path2)
                 doc2 = db2.get(keyhash2, None)
                 if doc2 is None:
@@ -1183,6 +1225,22 @@ class MountainClientLocal():
                 doc2['value']=json.dumps(valobj)
                 db2[keyhash2]=doc2
                 _db_save(db_path2, db2)
+
+                # to verify
+                db3 = _db_load(db_path2)
+                doc3=db3.get(keyhash2,None)
+                if not doc3:
+                    raise Exception('Problem verifying setValue for subkey == doc3 is None')
+                testval = doc3.get('value', None)
+                if not testval:
+                    raise Exception('Problem verifying setValue for subkey == testval is None')
+                try:
+                    testobj=json.loads(testval)
+                except:
+                    raise Exception('Problem verifying setValue for subkey == error parsing testval', testval)
+                testval2=testobj.get(subkey)
+                if testval2 != value:
+                    raise Exception('Problem verifying setValue for subkey == testval2 != value', testval2, value)
             ####################################
         else:
             # No subkey
@@ -1190,8 +1248,7 @@ class MountainClientLocal():
             db_path = self._get_db_path_for_keyhash(keyhash)
 
             ####################################
-            lock=FileLock(db_path+'.lock')
-            with lock:
+            with FileLock(db_path+'.lock') as lock:
                 db = _db_load(db_path)
                 doc = db.get(keyhash, None)
                 if doc is None:
@@ -1203,11 +1260,49 @@ class MountainClientLocal():
                     if keyhash in db:
                         del db[keyhash]
                 _db_save(db_path, db)
+
+                # to verify
+                if value is not None:
+                    db0 = _db_load(db_path)
+                    doc0=db0.get(keyhash,None)
+
+                    if not doc0:
+                        raise Exception('Problem verifying setValue == doc0 is None')
+                    testval0 = doc0.get('value', None)
+                    if testval0 != value:
+                        raise Exception('Problem verifying setValue == testval0 != value', testval0, value)
             ####################################
         
         return True
 
-    def getSubKeys(self, *, key):
+    def _getValueOld(self, *, key, subkey=None):
+        if subkey is not None:
+            val = self.getValue(key=dict(subkeys=True, key=key))
+            try:
+                val = json.loads(val)
+            except:
+                val = None
+            if val is None:
+                val = dict()
+            if subkey == '-':
+                return json.dumps(val)
+            return val.get(subkey, None)
+        
+        keyhash = _hash_of_key(key)
+        db_path = self._get_db_path_for_keyhash(keyhash)
+
+        ####################################
+        with FileLock(db_path+'.lock') as lock:
+            db = _db_load(db_path)
+        ####################################
+
+        doc = db.get(keyhash, None)
+        if doc:
+            return doc.get('value')
+        else:
+            return None
+
+    def _getSubKeysOld(self, *, key):
         val = self.getValue(key=key, subkey='-')
         try:
             val = json.loads(val)
@@ -1320,6 +1415,26 @@ class MountainClientLocal():
         return None
 
     def _get_db_path_for_keyhash(self, keyhash):
+        path=os.path.join(self.localDatabasePath(), keyhash[0:2], keyhash[2:4])
+        if not os.path.exists(path):
+            try:
+                os.makedirs(path)
+            except:
+                if not os.path.exists(path):
+                    raise Exception('Unexpected problem. Unable to create directory: '+path)
+        return os.path.join(path, keyhash)
+
+    def _get_subkey_db_path_for_keyhash(self, keyhash):
+        path=os.path.join(self.localDatabasePath(), keyhash[0:2], keyhash[2:4], keyhash+'.dir')
+        if not os.path.exists(path):
+            try:
+                os.makedirs(path)
+            except:
+                if not os.path.exists(path):
+                    raise Exception('Unexpected problem. Unable to create directory: '+path)
+        return path
+
+    def _get_db_path_for_keyhash_old(self, keyhash):
         path=os.path.join(self.localDatabasePath(), keyhash[0], keyhash[1:3])
         if not os.path.exists(path):
             try:
@@ -1562,6 +1677,10 @@ def _read_text_file(path):
 def _write_json_file(obj, path):
     with open(path, 'w') as f:
         return json.dump(obj, f)
+
+def _write_text_file(fname,txt):
+    with open(fname,'w') as f:
+        f.write(txt)
 
 
 def _get_default_local_db_path():

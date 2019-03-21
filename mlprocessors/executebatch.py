@@ -29,11 +29,16 @@ def executeBatch(*, jobs, label='', num_workers=None, compute_resource=None, hal
     if len(jobs) == 0:
         return []
 
+    if num_workers == 1:
+        num_workers = None
+    if not srun_opts:
+        srun_opts = None
+
     if num_workers is not None:
         if compute_resource is not None:
             raise Exception('Cannot specify both num_workers and compute_resource in executeBatch.')
         if srun_opts is not None:
-            raise Exception('Cannot specify both num_workers and srun_opts in executeBatch.')
+            raise Exception('Cannot specify both num_workers and srun_opts in executeBatch.', num_workers, srun_opts)
         if job_index_file is not None:
             raise Exception('Cannot specify both num_workers and job_index_file in executeBatch.')
     if compute_resource is not None:
@@ -81,7 +86,7 @@ def executeBatch(*, jobs, label='', num_workers=None, compute_resource=None, hal
         batch_id = CRC.initializeBatch(jobs=jobs, label=label)
         CRC.startBatch(batch_id=batch_id)
         try:
-            CRC.monitorBatch(batch_id=batch_id)
+            CRC.monitorBatch(batch_id=batch_id, jobs=jobs, label=label)
         except:
             CRC.stopBatch(batch_id=batch_id)
             raise
@@ -97,11 +102,11 @@ def executeBatch(*, jobs, label='', num_workers=None, compute_resource=None, hal
         return results
 
     # Not using compute resource, do this locally
-
-    print('Making sure files are available on local computer...')
-    for fname in files_to_realize:
-        print('Realizing {}...'.format(fname))
-        mt.realizeFile(path=fname)
+    if job_index_file is None:
+        print('Making sure files are available on local computer...')
+        for fname in files_to_realize:
+            print('Realizing {}...'.format(fname))
+            mt.realizeFile(path=fname)
 
     if srun_opts is None:
         for job_index, job in enumerate(jobs):
@@ -124,6 +129,7 @@ def executeBatch(*, jobs, label='', num_workers=None, compute_resource=None, hal
                 while True:
                     job_index = _take_next_batch_job_index_to_run(job_index_file)
                     if job_index < len(jobs):
+                        print('Executing job {}'.format(job_index))
                         _execute_job(jobs[job_index])
                     else:
                         break
@@ -199,11 +205,21 @@ def executeBatch(*, jobs, label='', num_workers=None, compute_resource=None, hal
                 srun_sh_script.wait(5)
             if srun_sh_script.returnCode() != 0:
                 raise Exception('Non-zero return code for srun script.')
+            # print('----- sleeping 4 seconds... in future, maybe we should not need to do this.')
+            # time.sleep(4)
+            # print('--------------------------------------------------------------------------')
             result_objects=[]
             for ii, job in enumerate(jobs):
-                result_object = local_client.loadObject(key=job_result_key, subkey=str(ii))
-                if result_object is None:
-                    raise Exception('Unexpected problem in executeBatch (srun mode): result object is none')
+                print('Loading result object...', job_result_key, ii)
+                result_object = None
+                while result_object is None:
+                    result_object = local_client.loadObject(key=job_result_key, subkey=str(ii))
+                    if result_object is None:
+                        print('Problem loading result....', job_result_key, str(ii))
+                        print('=====================', local_client.getValue(key=job_result_key, subkey='-'))
+                        print('=====================', local_client.getValue(key=job_result_key, subkey=str(ii)))
+                        time.sleep(3)
+                    # raise Exception('Unexpected problem in executeBatch (srun mode): result object is none')
                 result_objects.append(result_object)
             results = [MountainJobResult(result_object=obj) for obj in result_objects]
     
@@ -243,7 +259,24 @@ def _set_job_result(job, result_object):
     job_index = getattr(job, 'job_index', None)
     if job_result_key:
         subkey = str(job_index)
-        local_client.saveObject(key=job_result_key, subkey=subkey, object=result_object)
+        num_tries=0
+        while True:
+            print('Saving result object...', job_result_key, subkey)
+            local_client.saveObject(key=job_result_key, subkey=subkey, object=result_object)
+            testing = local_client.loadObject(key=job_result_key, subkey=subkey)
+            if result_object and (testing is None):
+                print('WARNING: Problem loading object immediately after saving....')
+                print('==== value', local_client.getValue(key=job_result_key, subkey=subkey))
+                print('==== object', local_client.loadObject(key=job_result_key, subkey=subkey))
+                print(result_object)
+                num_tries = num_tries + 1
+                if num_tries >= 3:
+                    raise Exception('Unexpected: Problem loading object immediately after saving')
+                else:
+                    print('retrying...')
+            else:
+                # we are good
+                break
 
 def _execute_job(job):
     local_client = MountainClient()
