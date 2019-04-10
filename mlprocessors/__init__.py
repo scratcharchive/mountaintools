@@ -5,6 +5,9 @@ from .executebatch import executeBatch, configComputeResource
 from .computeresourceserver import ComputeResourceServer
 from .computeresourceclient import ComputeResourceClient
 from .mountainjob import MountainJob
+from .shellscript import ShellScript
+from .localcomputeresource import LocalComputeResource
+from .temporarydirectory import TemporaryDirectory
 
 __all__ = [
     "Input", "Output",

@@ -9,6 +9,7 @@ import signal
 import tempfile
 
 
+@pytest.mark.cairio
 def test_cairio(tmpdir):
     tmpdir = str(tmpdir)
     os.environ['KBUCKET_CACHE_DIR'] = tmpdir+'/sha1-cache'
@@ -88,7 +89,7 @@ def test_cairio_subkeys():
     # data for the first pass
     subkeys = ['key1', 'key2', 'key3']
     subvals = ['val1-', 'val2-', 'val3-']
-    for pass0 in range(1, 3):  # two passes
+    for pass0 in range(1, 3):  # two passes # pylint: disable=unused-variable
         cc.setValue(key='parent_key', subkey='-', value=None)  # clear it out
         for sk, sv in zip(subkeys, subvals):
             cc.setValue(key='parent_key', subkey=sk, value=sv)

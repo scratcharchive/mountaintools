@@ -7,6 +7,7 @@ from .steady_download_and_compute_sha1 import steady_download_and_compute_sha1
 import random
 import time
 from .filelock import FileLock
+import mtlogging
 
 # TODO: implement cleanup() for Sha1Cache
 # removing .record.json and .hints.json files that are no longer relevant
@@ -15,6 +16,7 @@ from .filelock import FileLock
 class Sha1Cache():
     def __init__(self):
         self._directory = None
+        self._alternate_directories = None
 
     def directory(self):
         if self._directory:
@@ -22,8 +24,21 @@ class Sha1Cache():
         else:
             return os.getenv('KBUCKET_CACHE_DIR', '/tmp/sha1-cache')
 
+    def alternateDirectories(self):
+        if self._alternate_directories:
+            return self._alternate_directories
+        else:
+            val = os.getenv('KBUCKET_CACHE_DIR_ALT', None)
+            if val:
+                return val.split(':')
+            else:
+                return []
+
     def setDirectory(self, directory):
         self._directory = directory
+
+    def setAlternateDirectories(self, directories):
+        self._alternate_directories = directories
 
     def findFile(self, sha1):
         path, alternate_paths = self._get_path(
@@ -61,7 +76,7 @@ class Sha1Cache():
                 _safe_remove_file(hints_fname)
         return None
 
-    def downloadFile(self, url, sha1, target_path=None, size=None, verbose=False):
+    def downloadFile(self, url, sha1, target_path=None, size=None, verbose=False, show_progress=False):
         alternate_target_path = False
         if target_path is None:
             target_path = self._get_path(sha1, create=True)
@@ -69,7 +84,7 @@ class Sha1Cache():
             alternate_target_path = True
         
         path_tmp = target_path+'.downloading.' + _random_string(6)
-        if (verbose) or (size > 10000):
+        if (verbose) or (show_progress) or (size > 10000):
             print(
                 'Downloading file --- ({}): {} -> {}'.format(_format_file_size(size), url, target_path))
         
@@ -77,7 +92,7 @@ class Sha1Cache():
         sha1b = steady_download_and_compute_sha1(url=url, target_path=path_tmp)
         elapsed=time.time()-timer
 
-        if (verbose) or (size > 10000):
+        if (verbose) or (show_progress) or (size > 10000):
             print('Downloaded file ({}) in {} sec.'.format(_format_file_size(size), elapsed))
             
         if not sha1b:
@@ -91,8 +106,8 @@ class Sha1Cache():
         if alternate_target_path:
             if os.path.exists(target_path):
                 _safe_remove_file(target_path)
-            _rename_file(path_tmp, target_path, remove_if_exists=True)
-            self.computeFileSha1(target_path, _known_sha1=sha1)
+            _rename_file(path_tmp, target_path, remove_if_exists=True)            
+            self.reportFileSha1(target_path, sha1)
         else:
             if not os.path.exists(target_path):
                 _rename_file(path_tmp, target_path, remove_if_exists=False)
@@ -113,6 +128,7 @@ class Sha1Cache():
 
         return path0
 
+    @mtlogging.log()
     def copyFileToCache(self, path):
         sha1 = self.computeFileSha1(path)
         path0 = self._get_path(sha1, create=True)
@@ -122,18 +138,29 @@ class Sha1Cache():
             _rename_file(tmp_path, path0, remove_if_exists=False)
         return path0, sha1
 
+    @mtlogging.log()
     def computeFileSha1(self, path, _known_sha1=None):
+        path = os.path.abspath(path)
+        basename = os.path.basename(path)
+        if len(basename)==40:
+            # suspect it is itself a file in the cache
+            if self._get_path(sha1=basename) == path:
+                # in that case we don't need to compute
+                return basename
+
         aa = _get_stat_object(path)
         aa_hash = _compute_string_sha1(json.dumps(aa, sort_keys=True))
 
         path0 = self._get_path(aa_hash, create=True)+'.record.json'
-        if os.path.exists(path0):
-            obj = _read_json_file(path0, delete_on_error=True)
-            if obj:
-                bb = obj['stat']
-                if _stat_objects_match(aa, bb):
-                    if obj.get('sha1', None):
-                        return obj['sha1']
+        if not _known_sha1:
+            if os.path.exists(path0):
+                obj = _read_json_file(path0, delete_on_error=True)
+                if obj:
+                    bb = obj['stat']
+                    if _stat_objects_match(aa, bb):
+                        if obj.get('sha1', None):
+                            return obj['sha1']
+
         if _known_sha1 is None:
             sha1 = _compute_file_sha1(path)
         else:
@@ -166,6 +193,9 @@ class Sha1Cache():
         # todo: use hints for findFile
         return sha1
 
+    def reportFileSha1(self, path, sha1):
+        self.computeFileSha1(path, _known_sha1=sha1)
+
     def _get_path(self, sha1, *, create=True, directory=None, return_alternates=False):
         if directory is None:
             directory = self.directory()
@@ -181,24 +211,17 @@ class Sha1Cache():
         if not return_alternates:
             return os.path.join(path0, sha1)
         else:
-            altpaths = []
-            list0 = _safe_list_dir(os.path.join(directory,'alternate'))
-            for name0 in list0:
-                altdir = os.path.join(directory,'alternate',name0)
-                altpaths.append(os.path.join(altdir,path1,sha1))
+            altpaths=[]
+            alt_dirs = self.alternateDirectories()
+            for altdir in alt_dirs:
+                altpaths.append(os.path.join(altdir, path1, sha1))
             return os.path.join(path0,sha1), altpaths
 
-    def _determine_alternate_directories(self):
-        ret = []
-        list0 = _safe_list_dir(self.directory()+'/alternate')
-        for name0 in list0:
-            path1 = self.directory()+'/alternate/'+name0
-            if os.path.isdir(path1) or os.path.islink(path1):
-                ret.append(path1)
-        return ret
 
-
+@mtlogging.log()
 def _compute_file_sha1(path):
+    if not os.path.exists(path):
+        return None
     if (os.path.getsize(path) > 1024*1024*100):
         print('Computing sha1 of {}'.format(path))
     BLOCKSIZE = 65536
@@ -244,8 +267,9 @@ def _safe_remove_file(fname):
         print('Warning: unable to remove file that we thought existed: '+fname)
 
 
+@mtlogging.log()
 def _read_json_file(path, *, delete_on_error=False):
-    with FileLock(path+'.lock') as lock:
+    with FileLock(path+'.lock'):
         try:
             with open(path) as f:
                 return json.load(f)
@@ -263,7 +287,7 @@ def _read_json_file(path, *, delete_on_error=False):
 
 
 def _write_json_file(obj, path):
-    with FileLock(path+'.lock') as lock:
+    with FileLock(path+'.lock'):
         with open(path, 'w') as f:
             return json.dump(obj, f)
 
@@ -286,6 +310,7 @@ def _rename_or_copy(path1, path2):
         except:
             raise Exception('Problem renaming or copying file: {} -> {}'.format(path1, path2))
 
+@mtlogging.log()
 def _rename_file(path1, path2, remove_if_exists):
     if os.path.abspath(path1) == os.path.abspath(path2):
         return

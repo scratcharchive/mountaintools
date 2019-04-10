@@ -3,7 +3,7 @@ from ipython_genutils.py3compat import safe_unicode, string_types
 import re
 import io
 from copy import deepcopy
-
+import numbers
 
 class VDOM(object):
     def __init__(self, tag_name, attributes=None, style=None, children=None):
@@ -57,10 +57,13 @@ class VDOM(object):
                 if c is not None:
                     if isinstance(c, string_types):
                         out.write(escape(safe_unicode(c)))
+                    elif isinstance(c, numbers.Number):
+                        out.write(escape(safe_unicode(str(c))))
                     else:
                         out.write(c._repr_html_())
                 else:
-                    print('Warning: child of VDOM object is None (tag={}).'.format(self.tag_name), c)
+                    pass
+                    # print('Warning: child of VDOM object is None (tag={}).'.format(self.tag_name), c)
 
             out.write('</{tag}>'.format(tag=escape(self.tag_name)))
 
