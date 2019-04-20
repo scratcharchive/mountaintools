@@ -11,17 +11,22 @@ from .temporarydirectory import TemporaryDirectory
 from .mountainjob import MountainJob
 from .mountainjob import MountainJobResult
 import mtlogging
+from copy import deepcopy
 
 # module global
 _realized_files = set()
 _compute_resources_config = dict()
 
-def configComputeResource(name, *, resource_name, collection=None, share_id=None):
+def configComputeResource(name, *, resource_name, collection=None, kachery_name=None, share_id=None):
+    if share_id is not None:
+        print('WARNING: use kachery_name in configComputeResource (share_id) is deprecated)')
+        assert kachery_name is None
+        kachery_name = share_id
     if resource_name is not None:
         _compute_resources_config[name]=dict(
             resource_name=resource_name,
             collection=collection,
-            share_id=share_id
+            kachery_name=kachery_name
         )
     else:
         _compute_resources_config[name] = None
@@ -116,7 +121,13 @@ def executeBatch(*, jobs, label='', num_workers=None, compute_resource=None, hal
                 mt.saveFile(path=fname)
 
         mtlogging.sublog('initializing-batch')
-        CRC=ComputeResourceClient(**compute_resource)
+
+        args = deepcopy(compute_resource)
+        if 'share_id' in args:
+            args['kachery_name'] = args['share_id']
+            del args['share_id']
+        CRC=ComputeResourceClient(**args)
+
         batch_id = CRC.initializeBatch(jobs=jobs2, label=label)
         CRC.startBatch(batch_id=batch_id)
         mtlogging.sublog('running-batch')

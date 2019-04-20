@@ -5,10 +5,11 @@ import uuid
 import json
 
 class SelectBox(vd.Component):
-    def __init__(self, options=[]):
+    def __init__(self, options=[], **kwargs):
         vd.Component.__init__(self)
         self._on_change_handlers = []
         self._value = None
+        self._kwargs = kwargs
         self.setOptions(options)
 
     def setOptions(self, options):
@@ -42,7 +43,7 @@ class SelectBox(vd.Component):
                 opts.append(vd.option(option, selected='selected'))
             else:
                 opts.append(vd.option(option))
-        X = vd.select(opts, onchange=self._on_change)
+        X = vd.select(opts, onchange=self._on_change, **self._kwargs)
         return X
 
 
@@ -149,11 +150,12 @@ class Pyplot(vd.Component):
         return elmt
 
 class PlotlyPlot(vd.Component):
-    def __init__(self, data, opts=None, size=None):
+    def __init__(self, data, layout=dict(), config=dict(), size=None):
         vd.Component.__init__(self)
         self._elmt_id = 'PlotlyPlot-'+str(uuid.uuid4())
         self._data = data
-        self._opts = opts
+        self._layout = layout
+        self._config = config
         self._size = size
         vd.devel.loadJavascript(url='https://cdn.plot.ly/plotly-latest.min.js')
 
@@ -180,26 +182,81 @@ class PlotlyPlot(vd.Component):
             else:
                 raise Exception('Unable to JSON serialize data of type {}'.format(str(type(data))))
 
+    def updateSize(self, size):
+        if self._size == size:
+            return
+        self._size = size
+        js = """
+            function on_plotly_ready(cb) {
+                if (window.Plotly) {
+                    cb();
+                    return;
+                }
+                setTimeout(function() {
+                    on_plotly_ready(cb);
+                },100);
+            }
+            on_plotly_ready(function() { // wait until plotly has loaded
+                let div=document.getElementById('{elmt_id}');                
+                if (({width}) && ({height}) && (div)) {
+                    Plotly.relayout(div, {width:{width}, height:{height}})
+                }
+            })
+        """
+        js = js.replace('{elmt_id}', self._elmt_id)
+        if self._size:
+            width0 = self._size[0]
+            height0 = self._size[1]
+        else:
+            width0 = 'null'
+            height0 = 'null'
+        js = js.replace('{width}', str(width0))
+        js = js.replace('{height}', str(height0))
+        self.executeJavascript(js)
+
+    def javascriptPlotObject(self):
+        ret = "((window.plotly_plots||{})['{component_id}'])"
+        ret = ret.replace('{component_id}', self.componentId())
+        return ret
+
     def render(self):
-        div = vd.div(id=self._elmt_id)
+        div = vd.div('Loading plot...', id=self._elmt_id)
         return div
 
+    # MEDIUM TODO make on_plot_ready more robust... report error after x tries
     def postRenderScript(self):
         data = self._filter_data(self._data)
         if type(data)!=list:
             data=[data]
+        if self._size:
+            self._layout['width']=self._size[0]
+            self._layout['height']=self._size[1]
         js = """
-        setTimeout(function() { // wait until plotly has loaded
-            let div=document.getElementById('{elmt_id}');
-            if (({width}) && ({height}) && (div)) {
-                div.style="width:{width}px; height:{height}px";
-                Plotly.newPlot(div, {data}, {opts});
+        function on_plotly_ready(cb) {
+            if (window.Plotly) {
+                cb();
+                return;
             }
-        },100);
+            setTimeout(function() {
+                on_plotly_ready(cb);
+            },100);
+        }
+        on_plotly_ready(function() { // wait until plotly has loaded
+            let div=document.getElementById('{elmt_id}');
+            div.textContent='';
+            if (({width}) && ({height}) && (div)) {
+                // div.style="width:{width}px; height:{height}px";
+                window.plotly_plots=window.plotly_plots||{};
+                Plotly.newPlot(div, {data}, {layout}, {config});
+                window.plotly_plots['{component_id}']=div;
+            }
+        });
         """
         js = js.replace('{elmt_id}', self._elmt_id)
         js = js.replace('{data}', json.dumps(data))
-        js = js.replace('{opts}', json.dumps(self._opts or {}))
+        js = js.replace('{layout}', json.dumps(self._layout or {}))
+        js = js.replace('{config}', json.dumps(self._config or {}))
+        js = js.replace('{component_id}', self.componentId())
         if self._size:
             width0 = self._size[0]
             height0 = self._size[1]
@@ -219,12 +276,12 @@ class ScrollArea(vd.Component):
         self._height = height
 
     def render(self):
-        style = dict(overflow='auto')
+        style = dict(overflow='auto', position='absolute')
         if self._width:
             style['width'] = '{}px'.format(self._width)
         if self._height:
             style['height'] = '{}px'.format(self._height)
-        return vd.div(self._child, style=style)
+        return vd.div(self._child, style=style, id='test_id', class_='test_class')
 
 
 def _save_plot(fig, fname, quality=40):
