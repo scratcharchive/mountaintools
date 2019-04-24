@@ -7,7 +7,7 @@ pkg_name = "mountaintools"
 
 setuptools.setup(
     name=pkg_name,
-    version="0.2.7",
+    version="0.2.8",
     author="Jeremy Magland",
     author_email="jmagland@flatironinstitute.org",
     description="Tools for reproducible scientific research",
