@@ -1163,6 +1163,8 @@ class MountainClient():
             dirs={}
         )
         list0 = _safe_list_dir(path)
+        if list0 is None:
+            return None
         for name0 in list0:
             path0 = path+'/'+name0
             if os.path.isfile(path0):
@@ -1196,6 +1198,8 @@ class MountainClientLocal():
         ret = []
         with FileLock(subkey_db_path+'.lock'):
             list0 = _safe_list_dir(subkey_db_path)
+            if list0 is None:
+                return None
             for name0 in list0:
                 if name0.endswith('.txt'):
                     ret.append(name0[0:-4])
@@ -1778,8 +1782,7 @@ def _safe_list_dir(path):
         ret = os.listdir(path)
         return ret
     except:
-        print('Warning: unable to listdir: '+path)
-        return []
+        return None
 
 # The global module client
 _global_client = MountainClient()
