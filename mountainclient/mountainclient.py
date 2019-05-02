@@ -165,6 +165,7 @@ class MountainClient():
         self._values_by_alias = dict()
         self._config_download_from = []
         self._local_db = MountainClientLocal(parent=self)
+
         self._initialize_kacheries()
         self._read_pairio_tokens()
 
@@ -325,13 +326,13 @@ class MountainClient():
             if kname not in self._config_download_from:
                 self._config_download_from.append(kname)
     
-    def getDownloadFromConfig(self):
-        return deepcopy(dict(
-            download_from=self._config_download_from
-        ))
+    # def getDownloadFromConfig(self):
+    #     return deepcopy(dict(
+    #         download_from=self._config_download_from
+    #     ))
 
-    def setDownloadFromConfig(self, obj):
-        self._config_download_from = obj.get('download_from', [])
+    # def setDownloadFromConfig(self, obj):
+    #     self._config_download_from = obj.get('download_from', [])
 
     @mtlogging.log(name='MountainClient:getValue')
     def getValue(self, *, key, subkey=None, parse_json=False, collection=None, local_first=False, check_alt=False):
@@ -658,6 +659,7 @@ class MountainClient():
 
         return address
 
+    @mtlogging.log(name='MountainClient:loadObject')
     def resolveKeyPath(self, key_path):
         if not key_path.startswith('key://'):
             return key_path
@@ -1069,7 +1071,7 @@ class MountainClient():
                 return False
             return True
         else:
-            print('Already on server (***)')
+            # print('Already on server (***)')
             return True
 
     def _find_on_kachery_or_kbucket(self, *, download_from, sha1):
@@ -1204,7 +1206,7 @@ class MountainClientLocal():
         if not os.path.exists(subkey_db_path):
             return []
         ret = []
-        with FileLock(subkey_db_path+'.lock'):
+        with FileLock(subkey_db_path+'.lock', exclusive=False):
             list0 = _safe_list_dir(subkey_db_path)
             if list0 is None:
                 return None
@@ -1231,7 +1233,7 @@ class MountainClientLocal():
                 fname0 = os.path.join(subkey_db_path, subkey+'.txt')
                 if not os.path.exists(fname0):
                     return None
-                with FileLock(subkey_db_path+'.lock', _disable_lock=_disable_lock):
+                with FileLock(subkey_db_path+'.lock', _disable_lock=_disable_lock, exclusive=False):
                     txt = _read_text_file(fname0)
                     return txt
         else:
@@ -1246,7 +1248,7 @@ class MountainClientLocal():
                         if val:
                             return val
                 return None
-            with FileLock(fname0+'.lock', _disable_lock=_disable_lock):
+            with FileLock(fname0+'.lock', _disable_lock=_disable_lock, exclusive=False):
                 txt = _read_text_file(fname0)
                 return txt
 
@@ -1257,7 +1259,7 @@ class MountainClientLocal():
                 if value is not None:
                     raise Exception('Cannot set all subkeys with value that is not None')
                 subkey_db_path = self._get_subkey_file_path_for_keyhash(keyhash, _create=True)
-                with FileLock(subkey_db_path+'.lock'):
+                with FileLock(subkey_db_path+'.lock', exclusive=True):
                     shutil.rmtree(subkey_db_path)
             else:
                 subkey_db_path = self._get_subkey_file_path_for_keyhash(keyhash, _create=True)
@@ -1265,7 +1267,7 @@ class MountainClientLocal():
                 if os.path.exists(fname0):
                     if not overwrite:
                         return False
-                with FileLock(subkey_db_path+'.lock'):
+                with FileLock(subkey_db_path+'.lock', exclusive=True):
                     if os.path.exists(fname0):
                         if not overwrite:
                             return False
@@ -1282,7 +1284,7 @@ class MountainClientLocal():
             if os.path.exists(fname0):
                 if not overwrite:
                     return False
-            with FileLock(fname0+'.lock'):
+            with FileLock(fname0+'.lock', exclusive=True):
                 if os.path.exists(fname0):
                     if not overwrite:
                         return False
