@@ -966,14 +966,22 @@ class MountainClient():
             _global_kbucket_mem_dir_hash_cache[path] = ret
         return ret
 
+
+    def _maybe_resolve(self, path):
+        if not path or not path.startswith('key://'): 
+            return path
+        resolved_path = self.resolveKeyPath(path)
+        if not resolved_path: 
+            raise KeyError('{} could not be resolved'.format(path))
+        return resolved_path
+
     @mtlogging.log(name='MountainClient:computeFileSha1')
     def computeFileSha1(self, path):
-        if path and path.startswith('key://'):
-            path = self.resolveKeyPath(path)
-            if not path:
-                return None
-
-        return self._local_db.computeFileSha1(path=path)
+        try: 
+            path = self._maybe_resolve(path)
+            return self._local_db.computeFileSha1(path=path)
+        except KeyError:
+            return
 
     def sha1OfObject(self, obj):
         return _sha1_of_object(obj)
@@ -1468,6 +1476,8 @@ class MountainClientLocal():
 
     @mtlogging.log()
     def realizeFile(self, *, path, local_only=False, resolve_locally=True, dest_path=None, show_progress=False):
+        """
+        """
         if path.startswith('sha1://'):
             list0 = path.split('/')
             sha1 = list0[2]
@@ -1877,7 +1887,7 @@ _global_client = MountainClient()
 client = _global_client
 
 # if os.environ.get('CAIRIO_CONFIG'):
-#     print('configuring cairio...')
+#     print('configuring pairio...')
 #     a = os.environ.get('CAIRIO_CONFIG').split('.')
 #     password = os.environ.get('CAIRIO_CONFIG_PASSWORD', None)
 #     client.autoConfig(collection=a[0], key=a[1], password=password)
