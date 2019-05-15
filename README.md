@@ -2,12 +2,12 @@
 
 This is home for `mountaintools`, a Python package for accessing ...
 
-- [mlprocessors](mlprocessors)
-- [cairio](cairio)
-- [cairioserver](cairioserver)
+- [mlprocessors](mlprocessors)      - create mountain processors in Python   
 - [kachery](kachery)
 - [kbucketserver](kbucketserver)
-- [mountainclient](mountainclient)
+- [mountainclient](mountainclient)  - access to local and remote mountain databases and KBucket shares
+- [pairio](pairio)
+- [pairioserver](pairioserver)
 - [mtlogging](mtlogging)
 - [vdomr](vdomr)
 

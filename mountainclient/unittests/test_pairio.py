@@ -9,13 +9,13 @@ import signal
 import tempfile
 
 
-@pytest.mark.cairio
-def test_cairio(tmpdir):
+@pytest.mark.pairio
+def test_pairio(tmpdir):
     tmpdir = str(tmpdir)
     os.environ['KBUCKET_CACHE_DIR'] = tmpdir + '/sha1-cache'
 
-    from mountaintools import CairioClient
-    cc = CairioClient()
+    from mountaintools import PairioClient
+    cc = PairioClient()
 
     # Setting values (these should be short strings, <=80 characters)
     cc.setValue(key=dict(name='some-key1'), value='hello 1')
@@ -82,9 +82,9 @@ def test_cairio(tmpdir):
     assert txt2 == 'some file content'
 
 
-def test_cairio_subkeys():
-    from mountaintools import CairioClient
-    cc = CairioClient()
+def test_pairio_subkeys():
+    from mountaintools import PairioClient
+    cc = PairioClient()
 
     # data for the first pass
     subkeys = ['key1', 'key2', 'key3']
@@ -104,15 +104,15 @@ def test_cairio_subkeys():
 
 
 @pytest.fixture
-def cairioserver(request):
+def pairioserver(request):
     port = 20010
-    cmd = 'CAIRIO_ADMIN_TOKEN=test_admin_token PORT={} node /home/project/mountaintools/cairioserver/cairioserver/cairioserver.js'.format(
+    cmd = 'CAIRIO_ADMIN_TOKEN=test_admin_token PORT={} node /home/project/mountaintools/pairioserver/pairioserver/pairioserver.js'.format(
         port)
     popen = subprocess.Popen(cmd, stdout=sys.stdout,
                              universal_newlines=True, shell=True)
 
     def finalize():
-        print('Terminating cairio server...')
+        print('Terminating pairio server...')
         os.killpg(os.getpgid(popen.pid), signal.SIGTERM)
     request.addfinalizer(finalize)
     return dict(
@@ -121,19 +121,19 @@ def cairioserver(request):
 
 
 @pytest.mark.exclude
-@pytest.mark.cairioserver
-def test_cairioserver(cairioserver):
+@pytest.mark.pairioserver
+def test_pairioserver(pairioserver):
     time.sleep(2)
 
-    from mountaintools import CairioClient
-    cc = CairioClient()
-    cc.setRemoteConfig(url=cairioserver['url'])
+    from mountaintools import PairioClient
+    cc = PairioClient()
+    cc.setRemoteConfig(url=pairioserver['url'])
     cc.addRemoteCollection(collection='test_collection1',
                            token='test_token1', admin_token='test_admin_token')
 
     # Configure to point to the new collection
     cc.setRemoteConfig(
-        url=cairioserver['url'], collection='test_collection1', token='test_token1')
+        url=pairioserver['url'], collection='test_collection1', token='test_token1')
 
     # Test setting/getting
     cc.setValue(key='test_key1', value='test_value1')
