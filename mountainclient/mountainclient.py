@@ -1479,7 +1479,8 @@ class MountainClientLocal():
         """
         """
         if path.startswith('sha1://'):
-            sha1 = path[len('sha1://'):]
+            list0 = path.split('/')
+            sha1 = list0[2]
             return self._realize_file_from_sha1(sha1=sha1, dest_path=dest_path, show_progress=show_progress)
         elif path.startswith('kbucket://'):
             path_local = self._find_file_in_local_kbucket_share(path)
