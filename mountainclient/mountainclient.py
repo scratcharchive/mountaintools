@@ -656,7 +656,7 @@ class MountainClient():
         except:
             print('WARNING: unable to parse json in loadObject.', path, key, subkey)
 
-    def saveObject(self, object, *, key=None, subkey=None, basename='object.json', local_also=False, dest_path=None, collection=None, upload_to=None):
+    def saveObject(self, object, *, key=None, subkey=None, basename='object.json', local_also=False, dest_path=None, collection=None, upload_to=None, indent=None):
         """
         Save object into a json file and/or upload it to a remote KBucket share.
 
@@ -681,7 +681,7 @@ class MountainClient():
             self.setValue(key=key, subkey=subkey, collection=collection,
                           value=None),
             return None
-        return self.saveText(text=json.dumps(object), key=key, collection=collection, subkey=subkey, basename=basename, local_also=local_also, dest_path=dest_path, upload_to=upload_to)
+        return self.saveText(text=json.dumps(object, indent=indent), key=key, collection=collection, subkey=subkey, basename=basename, local_also=local_also, dest_path=dest_path, upload_to=upload_to)
 
     def createSnapshot(self, path, *, upload_to=None, download_recursive=False, upload_recursive=False, dest_path=None):
         """
@@ -1213,14 +1213,17 @@ class MountainClient():
         if not ret:
             return None
         if upload_to:
-            sha1 = self.computeFileSha1(path=ret)
-            kachery_url = self._resolve_kachery_url(upload_to)
-            if not kachery_url:
-                raise Exception('Unable to resolve kachery url for: {}'.format(upload_to))
-            if upload_to not in self._kachery_upload_tokens.keys():
-                raise Exception('Kachery upload token not found for: {}'.format(upload_to))
-            kachery_upload_token = self._kachery_upload_tokens[upload_to]
-            self._upload_to_kachery(path=path, sha1=sha1, kachery_url=kachery_url, upload_token=kachery_upload_token)
+            if type(upload_to) == str:
+                upload_to = [upload_to]
+            for ut in upload_to:
+                sha1 = self.computeFileSha1(path=ret)
+                kachery_url = self._resolve_kachery_url(ut)
+                if not kachery_url:
+                    raise Exception('Unable to resolve kachery url for: {}'.format(ut))
+                if ut not in self._kachery_upload_tokens.keys():
+                    raise Exception('Kachery upload token not found for: {}'.format(ut))
+                kachery_upload_token = self._kachery_upload_tokens[ut]
+                self._upload_to_kachery(path=path, sha1=sha1, kachery_url=kachery_url, upload_token=kachery_upload_token)
         return ret
 
     def _resolve_kachery_url(self, name):
@@ -1873,6 +1876,9 @@ def _get_default_alternate_local_db_paths():
 def _hash_of_key(key):
     if (type(key) == dict) or (type(key) == list):
         key = json.dumps(key, sort_keys=True, separators=(',', ':'))
+    else:
+        if key.startswith('~'):
+            return key[1:]
     return _sha1_of_string(key)
 
 
