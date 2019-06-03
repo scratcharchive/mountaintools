@@ -78,7 +78,11 @@ class KacheryTokens(object):
     def enable_upload(self, name):
         return self.enable(name, 'upload')
 
-    def remove(self, name, type):
+    def remove(self, name, type = None):
+        if not type:
+            dn = self.remove(name, 'download') 
+            up = self.remove(name, 'upload')
+            return dn or up
         if type not in ['download', 'upload']:
             return False
         for i in range(0, len(self._entries)):
