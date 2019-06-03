@@ -1,0 +1,21 @@
+#!/usr/bin/env python
+
+from mountainclient import KacheryTokens
+import argparse
+import sys
+
+def main():
+    parser = argparse.ArgumentParser(description='Manage kachery tokens database')
+    parser.add_argument('command', help='Command to issue')
+
+    args = parser.parse_args()
+    command = args.command
+    if command == 'list':
+        kt = KacheryTokens()
+        for entry in kt.entries():
+            print("{}\t{}\t{}".format(entry[0], entry[1], entry[2]))
+        sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()
