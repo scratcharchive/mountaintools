@@ -157,7 +157,6 @@ class MountainJob():
         if self._use_cached_results_only:
             return MountainJobResult()
 
-        keep_temp_files = True
         with TemporaryDirectory(remove=(not keep_temp_files), prefix='tmp_execute_outputdir_' + self._job_object['processor_name']) as tmp_output_path:
             attributes_for_processor = dict()
             tmp_output_file_names = dict()
@@ -385,6 +384,7 @@ class MountainJob():
             R.retcode = retcode
             R.runtime_info = runtime_capture.runtimeInfo()
             R.runtime_info['retcode'] = retcode
+            R.runtime_info['timed_out'] = R.timed_out
             R.console_out = local_client.saveText(text=runtime_capture.consoleOut(), basename='console_out.txt')
             R.outputs = dict()
             if retcode == 0:
