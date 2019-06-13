@@ -4,13 +4,9 @@ import json
 import hashlib
 import time
 import os
-import subprocess
 import tempfile
 import sys
 import shutil
-import fnmatch
-import inspect
-import shlex
 from mountainclient import client as mt
 from mountainclient import MountainClient
 import datetime
@@ -18,21 +14,22 @@ from .shellscript import ShellScript
 from .temporarydirectory import TemporaryDirectory
 import mtlogging
 import numpy as np
-import random
 from .mountainjobresult import MountainJobResult
+from typing import Union
 
 local_client = MountainClient()
+
 
 _internal = dict(
     current_job_queue=None
 )
 
 
-def currentJobQueue():
+def currentJobQueue() -> Union[None, object]:
     return _internal['current_job_queue']
 
 
-def _setCurrentJobQueue(jqueue):
+def _setCurrentJobQueue(jqueue: object):
     _internal['current_job_queue'] = jqueue
 
 
@@ -110,7 +107,7 @@ class MountainJob():
 
     @mtlogging.log(name='MountainJob:execute')
     def execute(self):
-        jq = _internal['current_job_queue']
+        jq = currentJobQueue()
         if jq:
             return jq.queueJob(self)
         else:
@@ -121,10 +118,21 @@ class MountainJob():
         use_cache = self._job_object['use_cache']
         ignore_local_cache = (os.environ.get('MLPROCESSORS_IGNORE_LOCAL_CACHE', 'FALSE') == 'TRUE')
         skip_failing = self._job_object['skip_failing']
+        skip_timed_out = self._job_object.get('skip_timed_out', False)
         if (use_cache) and (not force_run) and (not ignore_local_cache):
             result = self._find_result_in_cache()
             if result:
-                if (result.retcode == 0) or (skip_failing):
+                if (result.retcode == 0):
+                    use_result = True
+                else:
+                    if skip_failing:
+                        use_result = True
+                    elif skip_timed_out and (result.timed_out):
+                        use_result = True
+                    else:
+                        use_result = False
+
+                if use_result:
                     if result.retcode == 0:
                         self._copy_outputs_from_result_to_dest_paths(result)
                         result = self._post_process_result(result)
@@ -139,6 +147,7 @@ class MountainJob():
         force_run = self._job_object['force_run']
         use_cache = self._job_object['use_cache']
         skip_failing = self._job_object['skip_failing']
+        skip_timed_out = self._job_object.get('skip_timed_out', False)
         keep_temp_files = self._job_object['keep_temp_files']
         job_timeout = self._job_object.get('timeout', None)
         label = self._job_object.get('label', '')
@@ -147,7 +156,17 @@ class MountainJob():
         if (use_cache) and (not force_run) and (not ignore_local_cache):
             result = self._find_result_in_cache()
             if result:
-                if (result.retcode == 0) or (skip_failing):
+                if (result.retcode == 0):
+                    use_result = True
+                else:
+                    if skip_failing:
+                        use_result = True
+                    elif skip_timed_out and (result.timed_out):
+                        use_result = True
+                    else:
+                        use_result = False
+
+                if use_result:
                     if result.retcode == 0:
                         self._copy_outputs_from_result_to_dest_paths(result)
                         result = self._post_process_result(result)
@@ -365,17 +384,22 @@ class MountainJob():
 
                 # we may want to restore the following at some point
                 print_console_out = False
-                if print_console_out:
-                    if os.path.exists(tmp_process_console_out_fname):
-                        process_console_out = _read_text_file(tmp_process_console_out_fname) or ''
-                        if process_console_out:
-                            lines0 = process_console_out.splitlines()
-                            for line0 in lines0:
-                                print('>> {}'.format(line0))
-                        else:
-                            print('>> No console out for process')
+                if retcode != 0:
+                    print_console_out = True
+                if os.path.exists(tmp_process_console_out_fname):
+                    process_console_out = _read_text_file(tmp_process_console_out_fname) or ''
+                    if process_console_out:
+                        lines0 = process_console_out.splitlines()
+                        for line0 in lines0:
+                            console0 = '>> {}'.format(line0)
+                            if print_console_out:
+                                print(console0)
+                            else:
+                                runtime_capture.addToConsoleOut(console0 + '\n')
                     else:
-                        print('WARNING: no process console out file found: ' + tmp_process_console_out_fname)
+                        print('>> No console out for process')
+                else:
+                    print('WARNING: no process console out file found: ' + tmp_process_console_out_fname)
                 elapsed = time.time() - timer
                 print('========== {} exited with code {} after {} sec'.format(self._job_object['processor_name'], retcode, elapsed))
                 print('================================================================================')
@@ -399,7 +423,7 @@ class MountainJob():
             if use_cache:
                 # We will now store the result regardless of what the retcode was
                 # For retrieval we will then decide whether to repeat based on options
-                # specified (i.e., skip_failing)
+                # specified (i.e., skip_failing skip_timed_out)
                 self._store_result_in_cache(R)
 
             if (retcode == 0):
@@ -489,7 +513,7 @@ class MountainJob():
 
     def consoleOutSignature(self):
         return self.outputSignature('--console-out--')
-    
+
     def outputSignature(self, output_name):
         return _compute_mountain_job_output_signature(
             processor_name=self._job_object['processor_name'],
@@ -545,6 +569,7 @@ class MountainJob():
 
         R = MountainJobResult()
         R.retcode = retcode
+        R.timed_out = runtime_info.get('timed_out', False)
         R.runtime_info = runtime_info
         R.console_out = local_client.saveFile(path=output_paths['--console-out--'])
         R.outputs = dict()
@@ -622,6 +647,7 @@ class ConsoleCapture():
         self._time_start = time.time()
 
     def stop_capturing(self):
+        assert self._tmp_fname is not None
         self._time_stop = time.time()
         sys.stdout = self._original_stdout
         sys.stderr = self._original_stderr
@@ -634,6 +660,7 @@ class ConsoleCapture():
         self._file_handle.write(txt)
 
     def runtimeInfo(self):
+        assert self._time_start is not None
         return dict(
             start_time=self._time_start - 0,
             end_time=self._time_stop - 0,
@@ -698,12 +725,12 @@ def _write_text_file(fname, str):
         f.write(str)
 
 
-def _get_file_ext(fname):
+def _get_file_ext(fname: str):
     _, ext = os.path.splitext(fname)
     return ext
 
 
-def _make_remote_url_for_file(fname):
+def _make_remote_url_for_file(fname: str):
     if fname.startswith('sha1://'):
         return fname
     elif fname.startswith('kbucket://') or fname.startswith('sha1dir://'):
