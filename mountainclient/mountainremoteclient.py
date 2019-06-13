@@ -6,13 +6,14 @@ import os
 import requests
 import time
 import mtlogging
+from typing import Union, List, Optional
 
 
 class MountainRemoteClient():
     def __init__(self):
         pass
 
-    def addCollection(self, *, collection, token, url, admin_token):
+    def addCollection(self, *, collection, token: str, url: str, admin_token: str) -> bool:
         if not url:
             print('Missing url for remote mountain server.')
             return False
@@ -29,10 +30,10 @@ class MountainRemoteClient():
             return False
         return True
 
-    def getValue(self, *, collection, key, subkey, url):
+    def getValue(self, *, collection, key: str, subkey: Optional[str], url: str) -> Optional[str]:
         if not url:
             print('Missing url for remote mountain server.')
-            return False
+            raise ValueError('Missing url for remote mountain server.')
         keyhash = _hash_of_key(key)
         if subkey is None:
             path = '/get/{}/{}'.format(collection, keyhash)
@@ -47,6 +48,8 @@ class MountainRemoteClient():
     def setValue(self, *, collection, key, subkey, overwrite=True, value, url, token):
         if value:
             value_b64 = base64.b64encode(value.encode()).decode('utf-8')
+        else:
+            value_b64 = None
         if not url:
             print('Missing url for remote mountain server.')
             return False
@@ -117,7 +120,7 @@ class MountainRemoteClient():
             # print('Already on server (**)')
             return True
 
-    def getSubKeys(self, *, collection, key, url):
+    def getSubKeys(self, *, collection, key: str, url: str) -> List[str]:
         # TODO - fix this - do not require downloading the entire object - will prob require modifying api of server
         val = self.getValue(collection=collection,
                             key=key, url=url, subkey='-')
@@ -152,7 +155,7 @@ def _sha1_of_object(obj):
 
 
 @mtlogging.log()
-def _http_get_json(url, verbose=None, retry_delays=None):
+def _http_get_json(url: str, verbose: Optional[bool]=None, retry_delays=None) -> Optional[str]:
     timer = time.time()
     if retry_delays is None:
         retry_delays = [0.2, 0.5]
@@ -181,8 +184,8 @@ def _http_get_json(url, verbose=None, retry_delays=None):
 
 @mtlogging.log()
 def _http_post_file_data(url, fname, verbose=None):
+    timer = time.time()
     if verbose is None:
-        timer = time.time()
         verbose = (os.environ.get('HTTP_VERBOSE', '') == 'TRUE')
     if verbose:
         print('_http_post_file_data::: ' + fname)
