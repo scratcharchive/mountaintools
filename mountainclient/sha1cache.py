@@ -8,6 +8,7 @@ import random
 import time
 from .filelock import FileLock
 import mtlogging
+from typing import Optional
 
 # TODO: implement cleanup() for Sha1Cache
 # removing .record.json and .hints.json files that are no longer relevant
@@ -79,7 +80,7 @@ class Sha1Cache():
                 _safe_remove_file(hints_fname)
         return None
 
-    def downloadFile(self, url, sha1, target_path=None, size=None, verbose=False, show_progress=False):
+    def downloadFile(self, url, sha1, target_path=None, size=None, verbose=False, show_progress=False) -> Optional[str]:
         alternate_target_path = False
         if target_path is None:
             target_path = self._get_path(sha1, create=True)
