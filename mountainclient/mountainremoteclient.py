@@ -7,6 +7,7 @@ import requests
 import time
 import mtlogging
 from typing import Union, Dict, List, Optional, Any
+from .mttyping import StrOrDict
 
 
 class MountainRemoteClient():
@@ -30,7 +31,7 @@ class MountainRemoteClient():
             return False
         return True
 
-    def getValue(self, *, collection: str, key: str, subkey: Optional[str], url: str) -> Optional[str]:
+    def getValue(self, *, collection: str, key: StrOrDict, subkey: Optional[str], url: str) -> Optional[str]:
         if not url:
             print('Missing url for remote mountain server.')
             raise ValueError('Missing url for remote mountain server.')
@@ -45,7 +46,7 @@ class MountainRemoteClient():
             return None
         return obj['value']
 
-    def setValue(self, *, collection: str, key: str, subkey: Optional[str], overwrite: bool=True, value: Optional[str], url: str, token: str) -> bool:
+    def setValue(self, *, collection: str, key: StrOrDict, subkey: Optional[str], overwrite: bool=True, value: Optional[str], url: str, token: str) -> bool:
         if value:
             value_b64 = base64.b64encode(value.encode()).decode('utf-8')
         else:
@@ -120,7 +121,7 @@ class MountainRemoteClient():
             # print('Already on server (**)')
             return True
 
-    def getSubKeys(self, *, collection: str, key: str, url: str) -> List[str]:
+    def getSubKeys(self, *, collection: str, key: StrOrDict, url: str) -> List[str]:
         # TODO - fix this - do not require downloading the entire object - will prob require modifying api of server
         val = self.getValue(collection=collection,
                             key=key, url=url, subkey='-')

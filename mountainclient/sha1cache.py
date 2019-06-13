@@ -19,7 +19,7 @@ class Sha1Cache():
         self._directory = None
         self._alternate_directories = None
 
-    def directory(self) -> Optional[str]:
+    def directory(self) -> str:
         if self._directory:
             return self._directory
         else:
@@ -88,7 +88,7 @@ class Sha1Cache():
             alternate_target_path = True
 
         path_tmp = target_path + '.downloading.' + _random_string(6)
-        if (verbose) or (show_progress) or (size > 10000):
+        if (verbose) or (show_progress) or ((size is not None) and (size > 10000)):
             print(
                 'Downloading file --- ({}): {} -> {}'.format(_format_file_size(size), url, target_path))
 
@@ -96,7 +96,7 @@ class Sha1Cache():
         sha1b = steady_download_and_compute_sha1(url=url, target_path=path_tmp)
         elapsed = time.time() - timer
 
-        if (verbose) or (show_progress) or (size > 10000):
+        if (verbose) or (show_progress) or ((size is not None) and size > 10000):
             print('Downloaded file ({}) in {} sec.'.format(_format_file_size(size), elapsed))
 
         if not sha1b:
@@ -277,7 +277,7 @@ def _safe_remove_file(fname: str) -> None:
 
 
 @mtlogging.log()
-def _read_json_file(path: str, *, delete_on_error: bool = False) -> Any:
+def _read_json_file(path: str, *, delete_on_error: bool=False) -> Any:
     with FileLock(path + '.lock', exclusive=False):
         try:
             with open(path) as f:
@@ -349,7 +349,7 @@ def _rename_file(path1: str, path2: str, remove_if_exists: bool) -> None:
 
 # thanks: https://stackoverflow.com/questions/1094841/reusable-library-to-get-human-readable-version-of-file-size
 
-def _format_file_size(size: int) -> str:
+def _format_file_size(size: Optional[int]) -> str:
     if not size:
         return 'Unknown'
     if size <= 1024:
