@@ -1,7 +1,6 @@
 from .core import *
 from .registry import *
 from .validators import *
-from .executebatch import executeBatch
 from .mountainjob import MountainJob
 from .shellscript import ShellScript
 from .temporarydirectory import TemporaryDirectory
@@ -15,5 +14,5 @@ __all__ = [
     "Processor",
     "registry", "register_processor", "ProcessorRegistry",
     "Validator", "ValueValidator", "RegexValidator", "FileExtensionValidator", "FileExistsValidator",
-    "executeBatch", "MountainJob"
+    "MountainJob"
 ]

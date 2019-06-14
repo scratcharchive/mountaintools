@@ -111,7 +111,9 @@ def test_mandelbrot_errors():
 
     jobs = ComputeMandelbrotWithError.createJobs(job_args)
 
-    results = mlpr.executeBatch(jobs=jobs)
+    results = []
+    for job in jobs:
+        results.append(job.execute())
 
     X_list = []
     for result0 in results:
