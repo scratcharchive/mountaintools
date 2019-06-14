@@ -5,7 +5,6 @@ import random
 import time
 from mountainclient import client as mt
 from mountainclient import MountainClient
-from .computeresourceclient import ComputeResourceClient
 from .shellscript import ShellScript
 from .temporarydirectory import TemporaryDirectory
 from .mountainjob import MountainJob
@@ -15,36 +14,10 @@ from copy import deepcopy
 
 # module global
 _realized_files = set()
-_compute_resources_config = dict()
-
-
-def configComputeResource(name, *, resource_name, collection=None, kachery_name=None, share_id=None):
-    if share_id is not None:
-        print('WARNING: use kachery_name in configComputeResource (share_id) is deprecated)')
-        assert kachery_name is None
-        kachery_name = share_id
-    if resource_name is not None:
-        _compute_resources_config[name] = dict(
-            resource_name=resource_name,
-            collection=collection,
-            kachery_name=kachery_name
-        )
-    else:
-        _compute_resources_config[name] = None
-
-
-def configComputeResources(obj):
-    for key, cr in obj.items():
-        configComputeResource(
-            name=key,
-            resource_name=cr.get('resource_name', None),
-            collection=cr.get('collection', None),
-            share_id=cr.get('share_id', None)
-        )
 
 
 @mtlogging.log()
-def executeBatch(*, jobs, label='', num_workers=None, compute_resource=None, halt_key=None, job_status_key=None, job_result_key=None, srun_opts=None, job_index_file=None, cached_results_only=False, download_outputs=True, _job_handler=None):
+def executeBatch(*, jobs, label='', num_workers=None, halt_key=None, job_status_key=None, job_result_key=None, srun_opts=None, job_index_file=None, cached_results_only=False, download_outputs=True, _job_handler=None):
     all_kwargs = locals()
 
     if len(jobs) == 0:
@@ -56,38 +29,16 @@ def executeBatch(*, jobs, label='', num_workers=None, compute_resource=None, hal
         srun_opts = None
 
     if num_workers is not None:
-        if compute_resource is not None:
-            raise Exception('Cannot specify both num_workers and compute_resource in executeBatch.')
         if job_index_file is not None:
             raise Exception('Cannot specify both num_workers and job_index_file in executeBatch.')
-    if compute_resource is not None:
-        if srun_opts is not None:
-            raise Exception('Cannot specify both compute_resource and srun_opts in executeBatch.')
-        if job_index_file is not None:
-            raise Exception('Cannot specify both compute_resource and job_index_file in executeBatch.')
     if srun_opts is not None:
         if job_index_file is not None:
             raise Exception('Cannot specify both srun_opts and job_index_file in executeBatch.')
 
-    if type(compute_resource) == str:
-        if compute_resource in _compute_resources_config:
-            compute_resource = _compute_resources_config[compute_resource]
-        else:
-            raise Exception('No compute resource named {}. Use mlprocessors.configComputeResource("{}",...).'.format(compute_resource, compute_resource))
-
-    if type(compute_resource) == dict:
-        if compute_resource['resource_name'] is None:
-            compute_resource = None
-
-    if compute_resource or srun_opts:
-        if compute_resource:
-            mtlogging.sublog('checking-for-cached-results-prior-to-sending-to-compute-resource')
-            print('Checking for cached results prior to sending to compute resource...')
-        elif srun_opts:
-            mtlogging.sublog('checking-for-cached-results-prior-to-using-srun')
-            print('Checking for cached results prior to using srun...')
+    if srun_opts:
+        mtlogging.sublog('checking-for-cached-results-prior-to-using-srun')
+        print('Checking for cached results prior to using srun...')
         kwargs0 = all_kwargs
-        kwargs0['compute_resource'] = None
         kwargs0['cached_results_only'] = True
         kwargs0['num_workers'] = 10  # check it in parallel
         # kwargs0['num_workers'] = None # for timing, do not check in parallel
@@ -109,10 +60,6 @@ def executeBatch(*, jobs, label='', num_workers=None, compute_resource=None, hal
 
     jobs2 = [job for job in jobs if job.result.retcode is None]
 
-    if compute_resource:
-        for job in jobs2:
-            job.useRemoteUrlsForInputFiles()
-
     if _job_handler is not None:
         for job in jobs2:
             setattr(job, 'job_handler', _job_handler)
@@ -123,75 +70,6 @@ def executeBatch(*, jobs, label='', num_workers=None, compute_resource=None, hal
     files_to_realize = list(set(files_to_realize))
 
     local_client = MountainClient()
-
-    if compute_resource:
-        # print('Ensuring files are available on remote server...')
-        # mtlogging.sublog('ensuring-files-remote')
-        # collection=compute_resource.get('collection', None)
-        # upload_to=compute_resource.get('kachery_name', None)
-        # for fname in files_to_realize:
-        #     if fname.startswith('sha1://'):
-        #         if local_client.findFile(path=fname):
-        #             mt.saveFile(path=fname, collection=collection, upload_to=upload_to)
-        #     elif fname.startswith('kbucket://') or fname.startswith('sha1dir://'):
-        #         # todo: in case of sha1dir, save the dir
-        #         pass
-        #     else:
-        #         mt.saveFile(path=fname, collection=collection, upload_to=upload_to)
-
-        mtlogging.sublog('initializing-batch')
-
-        args = deepcopy(compute_resource)
-        if 'share_id' in args:
-            args['kachery_name'] = args['share_id']
-            del args['share_id']
-        CRC = ComputeResourceClient(**args)
-
-        batch_id = CRC.initializeBatch(jobs=jobs2, label=label)
-        CRC.startBatch(batch_id=batch_id)
-        mtlogging.sublog('running-batch')
-        try:
-            CRC.monitorBatch(batch_id=batch_id, jobs=jobs2, label=label)
-        except:
-            CRC.stopBatch(batch_id=batch_id)
-            raise
-
-        mtlogging.sublog('getting-batch-results')
-        results = CRC.getBatchJobResults(batch_id=batch_id)
-        if results is None:
-            raise Exception('Unable to get batch results.')
-        for i, job2 in enumerate(jobs2):
-            result0 = results[i]
-            if result0:
-                job2.result.fromObject(result0.getObject())
-            else:
-                raise Exception('Unexpected: Unable to find result for job {}'.format(i))
-
-        mtlogging.sublog('realizing-outputs')
-        # Download outputs to local computer
-        if download_outputs:
-            download_from = compute_resource.get('kachery_name', None)
-            for ii, result in enumerate(results):
-                if result and (result.retcode == 0):
-                    for output_name, output_path in result.outputs.items():
-                        if not local_client.realizeFile(path=output_path):
-                            print('Downloading output {} {} ...'.format(output_name, output_path))
-                            local_path = mt.realizeFile(path=output_path, download_from=download_from)
-                            if not local_path:
-                                raise Exception('Unable to realize output {} from {}'.format(output_name, output_path))
-                    if not local_client.realizeFile(path=result.console_out):
-                        print('Downloading console output {}...'.format(result.console_out))
-                        local_path = mt.realizeFile(path=result.console_out, download_from=download_from)
-                        if not local_path:
-                            raise Exception('Unable to realize console output from {}'.format(output_name))
-
-        mtlogging.sublog('caching-results-locally')
-        # save results to local cache
-        for ii, result in enumerate(results):
-            if result and (result.retcode == 0):
-                jobs2[ii].storeResultInCache(result)
-
-        return [job.result for job in jobs]
 
     # Not using compute resource, do this locally
     if not cached_results_only:
@@ -260,7 +138,7 @@ def executeBatch(*, jobs, label='', num_workers=None, compute_resource=None, hal
                 job_objects = local_client.loadObject(path = '{jobs_path}')
                 jobs = [MountainJob(job_object=obj) for obj in job_objects]
 
-                executeBatch(jobs=jobs, label='{label}', num_workers=None, compute_resource=None, halt_key={halt_key}, job_status_key={job_status_key}, job_result_key={job_result_key}, srun_opts=None, job_index_file='{job_index_file}', cached_results_only={cached_results_only})
+                executeBatch(jobs=jobs, label='{label}', num_workers=None, halt_key={halt_key}, job_status_key={job_status_key}, job_result_key={job_result_key}, srun_opts=None, job_index_file='{job_index_file}', cached_results_only={cached_results_only})
             """, script_path=os.path.join(temp_path, 'execute_batch_srun.py'), keep_temp_files=keep_temp_files)
             srun_py_script.substitute('{jobs_path}', jobs_path)
             srun_py_script.substitute('{label}', label)
