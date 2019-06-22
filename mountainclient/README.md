@@ -7,13 +7,13 @@ All I/O for MountainTools is handled using this client.
 
 There is a global client that may be imported via
 
-```
+```python
     from mountaintools import client as mt
 ```
 
 Or you can instantiate a local client object:
 
-```
+```python
     from mountaintools import MountainClient
     mt_client = MountainClient()
 ```
@@ -26,7 +26,7 @@ disk, but it can also be used to read and write from remote servers. For
 example, the following code saves and retrieves some short text strings
 using the local file system as storage.
 
-```
+```python
     from mountaintools import client as mt
 
     # Setting values (these should be short strings, <=80 characters)
@@ -45,7 +45,7 @@ While `setValue()` and `getValue()` are limited to working with short strings,
 larger objects may be stored using saveText(), saveObject() and saveFile(),
 and retrieved using `loadText()`, `loadObject()` and `loadFile()`, as follows:
 
-```
+```python
     from mountaintools import client as mt
 
     # Local storage of data and files, retrievable by SHA-1 hash
@@ -105,7 +105,7 @@ setting the `SHA1_CACHE_DIR` environment variable.
 
 To access content on a remote server, you can use
 
-```
+```python
     from mountaintools import client as mt
 
     mt.configRemoteReadonly(collection='<collection>', share_id='<id>')
@@ -113,4 +113,4 @@ To access content on a remote server, you can use
 
 where `<kachery-database-name>` refers to a remote kachery database. Depending
 on the access configuration of the remote server, you may need to provide
-authorization tokens.
+[authorization tokens](../README.md#setting-kachery-tokens).
