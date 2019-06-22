@@ -18,9 +18,13 @@ class MountainClientLocal():
             'KBUCKET_URL', 'https://kbucket.flatironinstitute.org')
         self._nodeinfo_cache = dict()
         self._verbose = None
+        self._quiet = False
 
     def configVerbose(self, value: bool) -> None:
         self._verbose = value
+
+    def configQuiet(self, value: bool) -> None:
+        self._quiet = value
 
     def getSubKeys(self, *, key: Union[str, dict]) -> Optional[List[str]]:
         keyhash = _hash_of_key(key)

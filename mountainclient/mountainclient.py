@@ -153,6 +153,7 @@ class MountainClient():
         self._kachery_download_tokens = dict()
         self._pairio_tokens = dict()
         self._verbose = None  # None might become true or false depending on env variables
+        self._quiet = False
         self._remote_client = MountainRemoteClient()
         self._values_by_alias = dict()
         self._config_download_from = []
@@ -186,6 +187,18 @@ class MountainClient():
         """
         self._verbose = value
         self._local_db.configVerbose(value)
+
+    def configQuiet(self, value: bool) -> None:
+        """
+        Toggle on or off quiet mode
+
+        Parameters
+        ----------
+        value : bool
+            Whether to turn on quiet mode
+        """
+        self._quiet = value
+        self._local_db.configQuiet(value)
 
     @mtlogging.log(name='MountainClient:getValue')
     def getValue(self, *,
@@ -1375,7 +1388,8 @@ class MountainClient():
                            path: str,
                            sha1: str,
                            kachery_url: str,
-                           upload_token: Optional[str]
+                           upload_token: Optional[str],
+                           quiet: bool = False,
                            ) -> bool:
         url_check_path0 = '/check/sha1/' + sha1
         url_check = kachery_url + url_check_path0
@@ -1391,16 +1405,18 @@ class MountainClient():
             url = kachery_url + url_path0 + '?signature=' + signature
             size0 = os.path.getsize(path)
             if size0 > 10000:
-                print(
-                    'Uploading to kachery --- ({}): {} -> {}'.format(_format_file_size(size0), path, url))
+                if not quiet:
+                    print(
+                        'Uploading to kachery --- ({}): {} -> {}'.format(_format_file_size(size0), path, url))
 
             timer = time.time()
             resp_obj = _http_post_file_data(url, path)
             elapsed = time.time() - timer
 
             if size0 > 10000:
-                print('File uploaded ({}) in {} sec'.format(
-                    _format_file_size(size0), elapsed))
+                if not quiet:
+                    print('File uploaded ({}) in {} sec'.format(
+                        _format_file_size(size0), elapsed))
 
             if not resp_obj.get('success', False):
                 print('Problem posting file data: ' + resp_obj.get('error', ''))
@@ -1515,11 +1531,11 @@ class MountainClient():
 
 
 @mtlogging.log()
-def _http_post_file_data(url: str, fname: str, verbose: Optional[bool]=None) -> dict:
+def _http_post_file_data(url: str, fname: str, verbose: Optional[bool]=None, quiet: bool=False) -> dict:
     timer = time.time()
     if verbose is None:
         verbose = (os.environ.get('HTTP_VERBOSE', '') == 'TRUE')
-    if verbose:
+    if verbose and not quiet:
         print('_http_post_file_data::: ' + fname)
     with open(fname, 'rb') as f:
         try:
@@ -1529,7 +1545,7 @@ def _http_post_file_data(url: str, fname: str, verbose: Optional[bool]=None) -> 
     if obj.status_code != 200:
         raise Exception('Error posting file data: {} {}'.format(
             obj.status_code, obj.content.decode('utf-8')))
-    if verbose:
+    if verbose and not quiet:
         print('Elapsed time for _http_post_file_Data: {}'.format(time.time() - timer))
     return json.loads(obj.content)
 
@@ -1569,7 +1585,8 @@ def _safe_list_dir(path: str) -> Optional[List[str]]:
 
 if 'SHA1_CACHE_DIR' not in os.environ:
     if 'KBUCKET_CACHE_DIR' in os.environ:
-        print('NOTE: please use the SHA1_CACHE_DIR environment variable rather than KBUCKET_CACHE_DIR (MountainTools >= 0.6.1')
+        if not quiet:
+            print('NOTE: please use the SHA1_CACHE_DIR environment variable rather than KBUCKET_CACHE_DIR (MountainTools >= 0.6.1')
 
 # The global module client
 _global_client = MountainClient()

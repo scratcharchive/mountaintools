@@ -118,28 +118,29 @@ def _sha1_of_object(obj: Union[List, Dict]) -> str:
 
 
 @mtlogging.log()
-def _http_get_json(url: str, verbose: Optional[bool]=None, retry_delays: Optional[List[float]]=None) -> Optional[str]:
+def _http_get_json(url: str, verbose: Optional[bool]=None, quiet: Optional[bool]=None, retry_delays: Optional[List[float]]=None) -> Optional[str]:
     timer = time.time()
     if retry_delays is None:
         retry_delays = [0.2, 0.5]
     if verbose is None:
         verbose = (os.environ.get('HTTP_VERBOSE', '') == 'TRUE')
-    if verbose:
+    if verbose and not quiet:
         print('_http_get_json::: ' + url)
     try:
         req = request.urlopen(url)
     except:
         if len(retry_delays) > 0:
-            print('Retrying http request in {} sec: {}'.format(
-                retry_delays[0], url))
+            if not quiet:
+                print('Retrying http request in {} sec: {}'.format(
+                    retry_delays[0], url))
             time.sleep(retry_delays[0])
-            return _http_get_json(url, verbose=verbose, retry_delays=retry_delays[1:])
+            return _http_get_json(url, verbose=verbose, quiet=quiet, retry_delays=retry_delays[1:])
         else:
             raise Exception('Unable to open url: ' + url)
     try:
         ret = json.load(req)
     except:
         raise Exception('Unable to load json from url: ' + url)
-    if verbose:
+    if verbose and not quiet:
         print('Elapsed time for _http_get_json: {} {}'.format(time.time() - timer, url))
     return ret
