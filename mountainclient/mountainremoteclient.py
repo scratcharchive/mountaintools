@@ -118,7 +118,7 @@ def _sha1_of_object(obj: Union[List, Dict]) -> str:
 
 
 @mtlogging.log()
-def _http_get_json(url: str, verbose: Optional[bool]=None, quiet: Optional[bool]=None, retry_delays: Optional[List[float]]=None) -> Optional[str]:
+def _http_get_json(url: str, verbose: Optional[bool]=None, quiet: bool=False, retry_delays: Optional[List[float]]=None) -> Optional[str]:
     timer = time.time()
     if retry_delays is None:
         retry_delays = [0.2, 0.5]
