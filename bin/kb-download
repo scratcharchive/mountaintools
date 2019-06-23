@@ -16,6 +16,7 @@ def main():
     parser.add_argument('src_path', help='KBucket or local path of source file')
     parser.add_argument('dst_path', help='Local destination path')
     parser.add_argument('--verbose', action='store_true', help='Turn on verbose output')
+    parser.add_argument('--quiet', action='store_true', help='Supress all non-warnings')
     parser.add_argument('--print', action='store_true', help='Print the files being downloaded')
     parser.add_argument('--download-from', required=False, default=None)
 
@@ -27,6 +28,9 @@ def main():
 
     if args.verbose:
         mt.configVerbose(True)
+
+    if args.quiet:
+        mt.configQuiet(True)
 
     if mt.isFile(path):
         path2 = mt.realizeFile(path=path, dest_path=args.dst_path)
