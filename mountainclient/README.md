@@ -42,7 +42,7 @@ By default these are stored inside the `~/.mountain` database directory. This
 location may be configured using the `MOUNTAIN_DIR` environment variable.
 
 While `setValue()` and `getValue()` are limited to working with short strings,
-larger objects may be stored using saveText(), saveObject() and saveFile(),
+larger objects may be stored using `saveText()`, `saveObject()` and `saveFile()`,
 and retrieved using `loadText()`, `loadObject()` and `loadFile()`, as follows:
 
 ```python
