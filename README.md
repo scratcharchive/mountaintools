@@ -16,6 +16,8 @@ To install mountaintools the easiest approach is to use pip. Open your terminal 
 pip install mountaintools
 ```
 
+**Note:** Depending on your environment you might need to substitute `pip` with `pip3` as mountaintools works only with Python 3.
+
 For information on using mountaintools see [mountainclient](mountainclient).
 
 
