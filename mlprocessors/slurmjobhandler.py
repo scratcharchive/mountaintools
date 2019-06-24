@@ -4,6 +4,7 @@ import time
 import random
 import signal
 import shutil
+import traceback
 import mlprocessors as mlpr
 from .jobhandler import JobHandler
 from .mountainjobresult import MountainJobResult
@@ -169,11 +170,7 @@ class SlurmJobHandler(JobHandler):
         -------
         None
         """
-        try:
-            shutil.rmtree(self._working_dir)
-        except:
-            time.sleep(3)
-            shutil.rmtree(self._working_dir)
+        _rmdir_with_retries(self._working_dir, num_retries=10)
 
     def _handle_unassigned_job(self, job: mlpr.MountainJob):
         compute_requirements = job.getObject().get('compute_requirements', {})
@@ -522,9 +519,20 @@ class _Worker():
         self._job = job
         job_object = self._job.getObject()
         job_fname = self._base_path + '_job.json'
-        with FileLock(job_fname + '.lock', exclusive=True):
-            with open(job_fname, 'w') as f:
-                json.dump(job_object, f)
+        num_tries = 3
+        for try_count in range(1, num_tries + 1):
+            try:
+                with FileLock(job_fname + '.lock', exclusive=True):
+                    with open(job_fname, 'w') as f:
+                        json.dump(job_object, f)
+                break
+            except:
+                if try_count < num_tries:
+                    traceback.print_exc()
+                    print('Problem writing job file (try number {}).'.format(try_count))
+                    time.sleep(3)
+                else:
+                    raise
 
     def hasStarted(self) -> bool:
         """Returns whether the worker (not the job) has started
@@ -646,20 +654,37 @@ class _SlurmProcess():
 
                 try:  # We are going to catch any exceptions and report them back to the parent process
                     num_found = 0
+                    num_exceptions = 0
                     while True:
                         # Check whether running file exists
-                        with FileLock(running_fname + '.lock', exclusive=False):
-                            if not os.path.exists(running_fname):
-                                print('Running file not found. Stopping worker.')
-                                break
+                        try:
+                            with FileLock(running_fname + '.lock', exclusive=False):
+                                if not os.path.exists(running_fname):
+                                    print('Stopping worker.')
+                                    break
+                        except:
+                            traceback.print_exc()
+                            print('WARNING: Unexpected problem checking for running file in worker. Trying to continue.')
+                            num_exceptions = num_exceptions + 1
+                            if num_exceptions >= 5:
+                                raise Exception('Problem checking for running file in worker. Too many exceptions. Aborting')
+                            time.sleep(3)
 
                         # Check to see if we have a job to do
                         job_object = None
-                        with FileLock(job_fname + '.lock', exclusive=False):
-                            if (os.path.exists(job_fname)) and not (os.path.exists(result_fname)):
-                                num_found = num_found + 1
-                                with open(job_fname, 'r') as f:
-                                    job_object = json.load(f)
+                        try:
+                            with FileLock(job_fname + '.lock', exclusive=False):
+                                if (os.path.exists(job_fname)) and not (os.path.exists(result_fname)):
+                                    num_found = num_found + 1
+                                    with open(job_fname, 'r') as f:
+                                        job_object = json.load(f)
+                        except:
+                            traceback.print_exc()
+                            print('WARNING: Unexpected problem loading job object file in worker. Trying to continue.')
+                            num_exceptions = num_exceptions + 1
+                            if num_exceptions >= 5:
+                                raise Exception('Problem loading job object file in worker. Too many exceptions. Aborting')
+                            time.sleep(3)
                         
                         # If we have a job to do, then let's do it
                         if job_object:
@@ -776,6 +801,21 @@ class _SlurmProcess():
             if not x.isFinished():
                 if not x.stopWithSignal(sig=signal.SIGTERM, timeout=5):
                     print('Warning: unable to stop slurm script.')
+
+
+def _rmdir_with_retries(dirname, num_retries, delay_between_tries=1):
+    for retry_num in range(1, num_retries + 1):
+        if not os.path.exists(dirname):
+            return
+        try:
+            shutil.rmtree(dirname)
+            break
+        except:
+            if retry_num < num_retries:
+                print('Retrying to remove directory: {}'.format(dirname))
+                time.sleep(delay_between_tries)
+            else:
+                raise Exception('Unable to remove directory after {} tries: {}'.format(num_retries, dirname))
 
 
 def _random_string(num: int):
