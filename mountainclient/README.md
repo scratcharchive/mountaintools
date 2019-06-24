@@ -102,15 +102,3 @@ and retrieved using `loadText()`, `loadObject()` and `loadFile()`, as follows:
 The larger content is stored in a disk-backed content-addressable storage
 database, located by default at `/tmp/sha1-cache`. This may be configured by
 setting the `SHA1_CACHE_DIR` environment variable.
-
-To access content on a remote server, you can use
-
-```python
-    from mountaintools import client as mt
-
-    mt.configRemoteReadonly(collection='<collection>', share_id='<id>')
-```
-
-where `<kachery-database-name>` refers to a remote kachery database. Depending
-on the access configuration of the remote server, you may need to provide
-[authorization tokens](../README.md#setting-kachery-tokens).
