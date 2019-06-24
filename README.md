@@ -3,19 +3,20 @@
 This is home for `mountaintools`, a Python package for accessing ...
 
 - [mlprocessors](mlprocessors)      - create mountain processors in Python   
-- [kachery](kachery)
-- [kbucketserver](kbucketserver)
+- [kachery](kachery)                - server for storing files based on their sha-1 hash
+- [kbucketserver](kbucketserver)    - system for sharing data for scientific research
 - [mountainclient](mountainclient)  - access to local and remote mountain databases and KBucket shares
-- [pairio](pairio)
-- [pairioserver](pairioserver)
-- [mtlogging](mtlogging)
-- [vdomr](vdomr)
+- [pairioserver](pairioserver)      - system for storing key(string)-value(string,dict) pairs
+- [mtlogging](mtlogging)            - helper module for managing message logging process for mountaintools
+- [vdomr](vdomr)                    - widget library for mountaintools (will probably be moved out to a separate repo)
 
 ## Installation
 To install mountaintools the easiest approach is to use pip. Open your terminal emulator and type in the following command:
 ```
 pip install mountaintools
 ```
+
+**Note:** Depending on your environment you might need to substitute `pip` with `pip3` as mountaintools works only with Python 3.
 
 For information on using mountaintools see [mountainclient](mountainclient).
 
