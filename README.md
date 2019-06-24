@@ -47,18 +47,18 @@ This file is a text file with three column records in each row.
 Each record consists of a server name or URL, token type (currently `upload` or `download`) and finally token contents.
 
 You can modify this file by hand but it is suggested that you rather use `kachery-token` which comes with mountaintools.
-To add a token run a command similar to `kachery-token add spikeforest.public download ***tokendata***` replacing `***tokendata***` with the actual token.
+To add a token run a command similar to `kachery-token add companylab.spike download ***tokendata***` replacing `***tokendata***` with the actual token.
 
 You can list registered tokens with `kachery-token list`. 
 
 ```
-spikeforest.public  download    3***9
-http://127.0.0.1    upload      f***8
+companylab.spike    download    l***5
+http://127.0.0.1    upload      p***w
 ```
 
 The tool will mask away token data. To unmask it run the tool with `--show-tokens` option.
 
 ```
-spikeforest.public  download    3662816cdc1ac55c1dc36a8f5b48573b464f9659
-http://127.0.0.1    upload      fdcd406bd0937b23e650f9666930ea123fc1f748
+companylab.spike    download    l51umhmqjp35
+http://127.0.0.1    upload      pnu8oyw6oyjw
 ```
