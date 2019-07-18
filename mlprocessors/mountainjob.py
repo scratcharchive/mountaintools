@@ -97,6 +97,20 @@ class MountainJob():
     def storeResultInCache(self, result: MountainJobResult) -> None:
         self._store_result_in_cache(result)
 
+    def substituteInputsAndParameters(self, **kwargs):
+        for key, val in kwargs.items():
+            if key in self._job_object['inputs']:
+                if self._job_object['inputs'][key]['path'] != '<placeholder>':
+                    raise Exception('substituteInputsAndParameters: Input is not a placeholder: {}'.format(key))
+                self._job_object['inputs'][key]['path'] = val
+                self._job_object['inputs'][key]['sha1'] = mt.computeFileSha1(val)
+            elif key in self._job_object['parameters']:
+                if self._job_object['parameters'][key] != '<placeholder>':
+                    raise Exception('substituteInputsAndParameters: Parameter is not a placeholder: {}'.format(key))
+                self._job_object['parameters'][key] = val
+            else:
+                raise Exception('substituteInputsAndParameters: No input or parameter: {}'.format(key))
+
     @mtlogging.log(name='MountainJob:execute')
     def execute(self) -> MountainJobResult:
         from .jobqueue import currentJobQueue
@@ -716,7 +730,7 @@ def _compute_mountain_job_output_signature(*, processor_name: str, processor_ver
             else:
                 hash0 = input0.get('sha1', input0.get('hash', None))
             if not hash0:
-                raise Exception('Problem getting sha1 or hash for input: {}'.format(input_name))
+                raise Exception('Problem getting sha1 or hash for input: {}: {}'.format(input_name, input0.get('path', '')))
             input_hashes[input_name] = hash0
         elif type(input0) == list:
             input_hashes[input_name] = []

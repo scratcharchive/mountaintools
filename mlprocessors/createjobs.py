@@ -12,7 +12,7 @@ local_client = MountainClient()
 
 
 @mtlogging.log()
-def createJobs(proc, argslist, verbose=None):
+def createJobs(proc, argslist, verbose=None) -> List[MountainJob]:
     if verbose is None:
         verbose = True
     # Get the code for the processor
@@ -244,6 +244,7 @@ def createJobs(proc, argslist, verbose=None):
     all_local_dir_inputs = []
     all_kbucket_file_inputs = []
     all_sha1_file_inputs = []
+    all_placeholder_inputs = []
     all_local_file_inputs = []
     for job_object in job_objects:
         for input_name, input0 in job_object['inputs'].items():
@@ -260,6 +261,8 @@ def createJobs(proc, argslist, verbose=None):
                             all_kbucket_file_inputs.append(input0)
                         elif path0.startswith('sha1://'):
                             all_sha1_file_inputs.append(input0)
+                        elif path0 == '<placeholder>':
+                            all_placeholder_inputs.append(input0)
                         else:
                             all_local_file_inputs.append(input0)
             elif type(input0) == list:
