@@ -7,7 +7,7 @@ pkg_name = "mountaintools"
 
 setuptools.setup(
     name=pkg_name,
-    version="0.7.1",
+    version="0.7.2",
     author="Jeremy Magland",
     author_email="jmagland@flatironinstitute.org",
     description="Tools for reproducible scientific research",
@@ -23,7 +23,7 @@ setuptools.setup(
         'bin/mt-execute-job'
     ],
     install_requires=[
-        'matplotlib', 'requests', 'ipython', 'simple-crypt', 'python-dotenv'
+        'matplotlib', 'requests', 'ipython', 'simple-crypt', 'python-dotenv', 'simplejson'
         #        'matplotlib','requests','ipython','simple-crypt','python-dotenv', 'asyncio', 'nest_asyncio', 'aiohttp'
     ],
     classifiers=(

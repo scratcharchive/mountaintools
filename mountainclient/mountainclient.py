@@ -1,4 +1,5 @@
 import json
+# import simplejson
 import os
 import sys
 import requests
@@ -481,6 +482,7 @@ class MountainClient():
             self.setValue(key=key, subkey=subkey, collection=collection,
                           value=None),
             return
+        # return self.saveText(text=simplejson.dumps(object, indent=indent, ignore_nan=True), key=key, collection=collection, subkey=subkey, basename=basename, dest_path=dest_path, upload_to=upload_to)
         return self.saveText(text=json.dumps(object, indent=indent), key=key, collection=collection, subkey=subkey, basename=basename, dest_path=dest_path, upload_to=upload_to)
 
     @mtlogging.log(name='MountainClient:realizeFile')
@@ -943,9 +945,8 @@ class MountainClient():
         Optional[str]
             The hash of the recursive directory index object from readDir().
         """
-        if path and path.startswith('key://'):
-            # todo
-            raise Exception('This case not handled yet')
+        # resolve key:// path
+        path = self._maybe_resolve(path)
 
         dd = self.readDir(path=path, recursive=True, include_sha1=True)
         ret = _sha1_of_object(dd)

@@ -103,7 +103,10 @@ class MountainJob():
                 if self._job_object['inputs'][key]['path'] != '<placeholder>':
                     raise Exception('substituteInputsAndParameters: Input is not a placeholder: {}'.format(key))
                 self._job_object['inputs'][key]['path'] = val
-                self._job_object['inputs'][key]['sha1'] = mt.computeFileSha1(val)
+                if self._job_object['inputs'][key].get('directory', False):
+                    self._job_object['inputs'][key]['hash'] = mt.computeDirHash(val)
+                else:
+                    self._job_object['inputs'][key]['hash'] = mt.computeFileSha1(val)
             elif key in self._job_object['parameters']:
                 if self._job_object['parameters'][key] != '<placeholder>':
                     raise Exception('substituteInputsAndParameters: Parameter is not a placeholder: {}'.format(key))
@@ -213,7 +216,7 @@ class MountainJob():
                     else:
                         ext = _get_file_ext(input_value) or '.in'
 
-                        if input0.get('directory', False) and ((input0['path'].startswith('kbucket://') or input0['path'].startswith('sha1dir://'))):
+                        if input0.get('directory', False) and ((input0['path'].startswith('kbucket://') or input0['path'].startswith('sha1dir://')) or input0['path'].startswith('key://')):
                             infile_in_container = input0['path']
                         else:
                             infile_in_container = '/processor_inputs/{}{}'.format(input_name, ext)

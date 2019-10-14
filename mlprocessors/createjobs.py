@@ -104,6 +104,8 @@ def createJobs(proc, argslist, verbose=None) -> List[MountainJob]:
                         path=fname0
                     )
                 else:
+                    if not fname0:
+                        inputs[name0] = None
                     if type(fname0) == str:
                         inputs[name0] = dict(
                             path=fname0
@@ -245,6 +247,7 @@ def createJobs(proc, argslist, verbose=None) -> List[MountainJob]:
     all_kbucket_file_inputs = []
     all_sha1_file_inputs = []
     all_placeholder_inputs = []
+    all_placeholder_dir_inputs = []
     all_local_file_inputs = []
     for job_object in job_objects:
         for input_name, input0 in job_object['inputs'].items():
@@ -254,6 +257,8 @@ def createJobs(proc, argslist, verbose=None) -> List[MountainJob]:
                     if input0.get('directory', False):
                         if path0.startswith('kbucket://') or path0.startswith('sha1dir://'):
                             all_kbucket_dir_inputs.append(input0)
+                        elif path0 == '<placeholder>':
+                            all_placeholder_dir_inputs.append(input0)
                         else:
                             all_local_dir_inputs.append(input0)
                     else:
